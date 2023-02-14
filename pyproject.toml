@@ -23,6 +23,12 @@ dependencies = [
     "pymongo>=4.3.3",
     "Jinja2>=3.1.2",
     "deepdiff>=6.2.3",
+    "aioftp>=0.21.4",
+    "async-timeout>=4.0.2",
+    "aiohttp>=3.8.4",
+    "flatdict>=4.0.1",
+    "xmlschema>=2.2.1",
+    "jsonschema>=4.17.3",
 ]
 requires-python = ">=3.10"
 readme = "README.md"
