@@ -26,10 +26,15 @@ class FTPParser(BaseParser):
         self.sync = False
 
     def parse(self, search_mask: str = None, **kwargs):
-        """Parse FTP-server
+        """Parse FTP-server recursively
 
         Args:
-            search_mask (str, optional): _description_. Defaults to None.
+            search_mask (str, optional): Mask to find specific files. If skipped, matches all files.
+        
+        kwargs:
+            start_folder (str, optional): Folder to parse. Defaults to root folder ('/')
+            download_folder (str, optional): Folder where save content of start_folder. Defaults to 'download/'
+            max_lvl (int, optional): Maximum depth level. If skipped, start_folder is parsed completely
         """
         self.thread_list = []
         self.port = None
