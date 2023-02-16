@@ -9,6 +9,7 @@ import sqlalchemy.util
 
 from ..util import _util
 
+logger = _util.getLogger("exstruct.orm.constructor")
 
 class ORMObjectsConstructor(object):
     """Consturctor of ORM classes objects"""

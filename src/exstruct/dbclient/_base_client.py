@@ -5,6 +5,8 @@ import more_itertools
 
 from ..util import _util
 
+logger = _util.getLogger("exstruct.dbclient.base_client")
+
 
 class BaseDBClient(object):
     """Prototype class for intercations with databases"""

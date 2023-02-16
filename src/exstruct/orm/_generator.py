@@ -9,6 +9,7 @@ from deepdiff import grep
 
 from ..util import _util
 
+logger = _util.getLogger("exstruct.orm.generator")
 
 class ORMClassGenerator(object):
     """Handles generation of ORM classes with '.jinja' templates"""
