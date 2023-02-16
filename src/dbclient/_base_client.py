@@ -3,7 +3,7 @@ import typing
 
 import more_itertools
 
-from ..util import util
+from ..util import _util
 
 
 class BaseDBClient(object):
@@ -12,7 +12,7 @@ class BaseDBClient(object):
     def __init__(
         self,
         db_logger: str = None,
-        logging_level: int = util.logging.DEBUG,
+        logging_level: int = _util.logging.DEBUG,
         *args,
         **kwargs,
     ) -> None:
@@ -23,7 +23,7 @@ class BaseDBClient(object):
         self._engine_kwargs = kwargs
 
         if self.verbose:
-            self.logging_level = util.logging.INFO
+            self.logging_level = _util.logging.INFO
 
     def batch_load(
         self, package: typing.Iterable, batch_size: int = None, *args, **kwargs
@@ -72,7 +72,7 @@ class BaseDBClient(object):
     @logging_level.setter
     def logging_level(self, new_logging_level: int | str):
         self._logging_level = new_logging_level
-        util.logging.getLogger(self.db_logger).setLevel(new_logging_level)
+        _util.logging.getLogger(self.db_logger).setLevel(new_logging_level)
 
     @property
     def db_logger(self):

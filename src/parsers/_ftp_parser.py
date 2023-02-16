@@ -8,10 +8,10 @@ from pathlib import Path
 import aioftp
 import async_timeout
 
-from ..util import util
-from .base_parser import BaseParser
+from ..util import _util
+from ._base_parser import BaseParser
 
-logger = util.getLogger("exstruct.parser.ftp_parser")
+logger = _util.getLogger("exstruct.parser.ftp_parser")
 
 
 class FTPParser(BaseParser):

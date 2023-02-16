@@ -3,9 +3,9 @@ import typing
 import dateutil
 import dateutil.parser
 
-from ..util import util
+from ..util import _util
 
-logger = util.getLogger("exstruct.extractor.extractor")
+logger = _util.getLogger("exstruct.extractor.extractor")
 
 
 # DONE TODO IMPROVE

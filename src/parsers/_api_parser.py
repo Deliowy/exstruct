@@ -9,10 +9,10 @@ import more_itertools
 import tenacity
 from tenacity import retry
 
-from ..util import util
-from .base_parser import PARSER_BATCH_SIZE, BaseParser
+from ..util import _util
+from ._base_parser import PARSER_BATCH_SIZE, BaseParser
 
-logger = util.getLogger("exstruct.parser.api_parser")
+logger = _util.getLogger("exstruct.parser.api_parser")
 
 
 class APIParser(BaseParser):
@@ -195,7 +195,7 @@ class APIParser(BaseParser):
     @retry(
         wait=tenacity.wait.wait_random_exponential(),
         stop=tenacity.stop.stop_after_attempt(5),
-        after=tenacity.after.after_log(logger, util.logging.WARNING),
+        after=tenacity.after.after_log(logger, _util.logging.WARNING),
     )
     async def fetch(self, session: aiohttp.ClientSession, *args, **kwargs):
         async with session.request(*args, **kwargs) as response:

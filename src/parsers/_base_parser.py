@@ -1,8 +1,8 @@
 import abc
 
-from ..util import util
+from ..util import _util
 
-logger = util.getLogger("exstruct.parser.base_parser")
+logger = _util.getLogger("exstruct.parser.base_parser")
 
 PARSER_BATCH_SIZE = 10000
 

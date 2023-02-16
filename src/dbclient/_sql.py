@@ -5,10 +5,10 @@ import tenacity
 import tenacity.retry
 from tenacity import retry
 
-from ..util import util
-from .base_client import BaseDBClient
+from ..util import _util
+from ._base_client import BaseDBClient
 
-logger = util.getLogger("exstruct.dbclient.sql")
+logger = _util.getLogger("exstruct.dbclient.sql")
 
 
 class SQLAlchemyDBClient(BaseDBClient):
@@ -17,7 +17,7 @@ class SQLAlchemyDBClient(BaseDBClient):
     def __init__(
         self,
         db_logger: str = "sqlalchemy.engine",
-        logging_level: int = util.logging.DEBUG,
+        logging_level: int = _util.logging.DEBUG,
         *args,
         **kwargs,
     ) -> None:
@@ -84,14 +84,14 @@ class SQLAlchemyDBClient(BaseDBClient):
     @logging_level.setter
     def logging_level(self, new_log_level: int | str):
         self._logging_level = new_log_level
-        util.logging.getLogger("sqlalchemy.engine").setLevel(new_log_level)
+        _util.logging.getLogger("sqlalchemy.engine").setLevel(new_log_level)
 
     def load(self, object: sqlalchemy.orm.DeclarativeMeta, *args, **kwargs):
         return super().load(object, *args, **kwargs)
 
     @retry(
         stop=tenacity.stop.stop_after_attempt(5),
-        after=tenacity.after.after_log(logger=logger, log_level=util.logging.WARNING),
+        after=tenacity.after.after_log(logger=logger, log_level=_util.logging.WARNING),
     )
     def _load(self, package: typing.Iterable):
         # Create tables and schema before loading data
@@ -130,7 +130,7 @@ class AsyncSQLAlchemyDBClient(object):
     def __init__(
         self,
         db_logger: str = "sqlalchemy.engine",
-        logging_level: int = util.logging.DEBUG,
+        logging_level: int = _util.logging.DEBUG,
         *args,
         **kwargs,
     ) -> None:
@@ -195,11 +195,11 @@ class AsyncSQLAlchemyDBClient(object):
     @logging_level.setter
     def logging_level(self, new_log_level: int | str):
         self._logging_level = new_log_level
-        util.logging.getLogger("sqlalchemy.engine").setLevel(new_log_level)
+        _util.logging.getLogger("sqlalchemy.engine").setLevel(new_log_level)
 
     @retry(
         stop=tenacity.stop.stop_after_attempt(5),
-        after=tenacity.after.after_log(logger=logger, log_level=util.logging.WARNING),
+        after=tenacity.after.after_log(logger=logger, log_level=_util.logging.WARNING),
     )
     async def _load(self, package: typing.Iterable):
         await self.init_tables(package[0].metadata)

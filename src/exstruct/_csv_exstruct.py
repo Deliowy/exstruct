@@ -1,10 +1,10 @@
 import typing
 from pathlib import Path
 
-from ..util import util
-from .base_exstruct import BaseExStruct
+from ..util import _util
+from ._base_exstruct import BaseExStruct
 
-logger = util.getLogger("exstruct.exstruct.csv_exstruct")
+logger = _util.getLogger("exstruct.exstruct.csv_exstruct")
 
 
 class CSVExStruct(BaseExStruct):

@@ -7,7 +7,7 @@ import warnings
 import sqlalchemy.orm
 import sqlalchemy.util
 
-from ..util import util
+from ..util import _util
 
 
 class ORMObjectsConstructor(object):
@@ -108,7 +108,7 @@ class ORMObjectsConstructor(object):
         for name, value in columns.items():
             command_arguments.append(f"{name} = {value}")
         command_arguments_str = ", ".join(command_arguments)
-        command = f"result = {module_name}.{util.to_var_name(class_name)}({command_arguments_str})"
+        command = f"result = {module_name}.{_util.to_var_name(class_name)}({command_arguments_str})"
         compiled_command = compile(command, __file__, "single")
 
         loc = {}

@@ -5,10 +5,10 @@ from pathlib import Path
 import jsonschema
 from deepdiff import DeepDiff
 
-from ..util import util
-from .base_exstruct import BaseExStruct
+from ..util import _util
+from ._base_exstruct import BaseExStruct
 
-logger = util.getLogger("exstruct.exsturct.json_exstruct")
+logger = _util.getLogger("exstruct.exsturct.json_exstruct")
 
 
 class JSONSchemaExStruct(BaseExStruct):

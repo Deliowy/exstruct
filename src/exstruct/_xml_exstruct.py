@@ -6,10 +6,10 @@ from pathlib import Path
 import xmlschema
 from deepdiff import DeepDiff
 
-from ..util import util
-from .base_exstruct import BaseExStruct
+from ..util import _util
+from ._base_exstruct import BaseExStruct
 
-logger = util.getLogger("exstruct.exstruct.xml_exstruct")
+logger = _util.getLogger("exstruct.exstruct.xml_exstruct")
 
 
 class XMLExStruct(BaseExStruct):
@@ -204,19 +204,19 @@ class XMLExStruct(BaseExStruct):
         collected_info_settings["annotation"] = repr(str(element.annotation))
 
         element_aliases = [
-            util.normalize_str(element.name),
-            util.normalize_str(element.local_name),
-            util.normalize_str(element.prefixed_name),
-            util.normalize_str(element.qualified_name),
+            _util.normalize_str(element.name),
+            _util.normalize_str(element.local_name),
+            _util.normalize_str(element.prefixed_name),
+            _util.normalize_str(element.qualified_name),
         ]
 
         if element.type:
             element_aliases.extend(
                 [
-                    util.normalize_str(element.type.name),
-                    util.normalize_str(element.type.local_name),
-                    util.normalize_str(element.type.prefixed_name),
-                    util.normalize_str(element.type.qualified_name),
+                    _util.normalize_str(element.type.name),
+                    _util.normalize_str(element.type.local_name),
+                    _util.normalize_str(element.type.prefixed_name),
+                    _util.normalize_str(element.type.qualified_name),
                 ]
             )
 

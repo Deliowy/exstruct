@@ -6,10 +6,10 @@ import tenacity
 import tenacity.retry
 from tenacity import retry
 
-from ..util import util
-from .base_client import BaseDBClient
+from ..util import _util
+from ._base_client import BaseDBClient
 
-logger = util.getLogger("exstruct.dbclient.no_sql")
+logger = _util.getLogger("exstruct.dbclient.no_sql")
 
 
 class MongoDBClient(BaseDBClient):
@@ -18,7 +18,7 @@ class MongoDBClient(BaseDBClient):
     def __init__(
         self,
         sync: bool = False,
-        logging_level: int = util.logging.INFO,
+        logging_level: int = _util.logging.INFO,
         *args,
         **kwargs,
     ) -> None:

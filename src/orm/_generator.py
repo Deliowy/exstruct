@@ -7,7 +7,7 @@ import jinja2
 import more_itertools
 from deepdiff import grep
 
-from ..util import util
+from ..util import _util
 
 
 class ORMClassGenerator(object):

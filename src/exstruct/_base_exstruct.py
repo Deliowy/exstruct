@@ -7,9 +7,9 @@ from pathlib import Path
 
 import flatdict
 
-from ..util import util
+from ..util import _util
 
-logger = util.getLogger("exstruct.exstruct.base_exstruct")
+logger = _util.getLogger("exstruct.exstruct.base_exstruct")
 
 
 class BaseExStruct(abc.ABC):
@@ -153,7 +153,7 @@ class BaseExStruct(abc.ABC):
 
         # normalization of mapped name according to python naming rules
         field_content = field_content.split(self.mapping_delimiter)
-        field_content[-1] = util.to_var_name(field_content[-1])
+        field_content[-1] = _util.to_var_name(field_content[-1])
         field_content = " -> ".join(field_content)
         self._fill_field(path_components, data_structure, "mapping", field_content)
 
