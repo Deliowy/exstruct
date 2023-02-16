@@ -17,21 +17,26 @@ logger = _util.getLogger("exstruct.parser.ftp_parser")
 class FTPParser(BaseParser):
     """Parser for data-sources that provide data via File Transfer Protocol (FTP)
 
-    `Heavily inspired by FTPSearcher`
+    `Modified FTPSearcher`
     `https://github.com/Sunlight-Rim/FTPSearcher`
     """
 
     def __init__(self, source: str, response_type: str, **kwargs) -> None:
         super().__init__(source, response_type, **kwargs)
         self.sync = False
-        self.start_folder = kwargs.pop("start_folder", "/")
-        self.regex = kwargs.pop("regex", None)
-        self.max_lvl = kwargs.pop("max_lvl", 0)
 
-    def parse(self, search_mask: str = None):
+    def parse(self, search_mask: str = None, **kwargs):
+        """Parse FTP-server
+
+        Args:
+            search_mask (str, optional): _description_. Defaults to None.
+        """
         self.thread_list = []
         self.port = None
         self.tasks_list = None
+        self.start_folder = kwargs.pop("start_folder", "/")
+        self.download_folder = kwargs.pop("download_folder", "download")
+        self.max_lvl = kwargs.pop("max_lvl", 0)
 
         if search_mask:
             self.search_mask = search_mask
@@ -126,6 +131,18 @@ class FTPParser(BaseParser):
         if re.match(self.search_mask, name):
             self.syncdownload(name, ftp, full_path)
 
+    def syncdownload(self, name, full_path, ftp: ftplib.FTP) -> None:
+        try:
+            logger.info(f"{full_path} downloading...")
+            download_folder = Path(self.download_folder, name)
+            fsea = open(download_folder, "wb")
+            ftp.retrbinary(f"RETR {name}", fsea.write, 8 * 1024)
+            fsea.close()
+            logger.info("Ok.")
+        except KeyboardInterrupt:
+            logger.info("You have interrupted file downloading.")
+            pass
+
     def badftp_cycle(self, file: str, ftp: ftplib.FTP, pathlist: list):
         ftp.cwd(file)
         pathlist.append(file)
@@ -180,17 +197,9 @@ class FTPParser(BaseParser):
                     if str(path).count("/") - 1 >= self.max_lvl:
                         break
                 if info["type"] == "file":  # it's better than client.is_file(path)
-                    if self.extns != False:  # for extensions.
-                        if re.match(self.search_mask, Path(path).name):
-                            asyncnumber += 1
-                            await self.asyncpreresults(host, port, path, asyncnumber)
-                    elif self.obj != "":
-                        for object in self.obj:  # for query.
-                            if object in str(path).split("/")[-1]:
-                                asyncnumber += 1
-                                await self.asyncpreresults(
-                                    host, port, path, asyncnumber
-                                )
+                    if re.match(self.search_mask, Path(path).name):
+                        asyncnumber += 1
+                        await self.asyncpreresults(host, port, path, asyncnumber)
             print(host + " was crawled.")
         except aioftp.StatusCodeError as inerr:
             if str(inerr.received_codes) == "('500',)":
@@ -224,7 +233,7 @@ class FTPParser(BaseParser):
         try:
             client2 = aioftp.Client()
             await client2.connect(host, port)
-            await client2.login(self.login, self.password)
+            await client2.login(self.user, self.password)
             print(f"{full_path} downloading...")
             await client2.download(
                 path,
