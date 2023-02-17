@@ -1,5 +1,6 @@
 import asyncio
 import ftplib
+import os
 import re
 import socket
 import threading
@@ -7,6 +8,7 @@ from pathlib import Path
 
 import aioftp
 import async_timeout
+import paramiko
 
 from ..util import _util
 from ._base_parser import BaseParser
@@ -23,18 +25,19 @@ class FTPParser(BaseParser):
 
     def __init__(self, source: str, response_type: str, **kwargs) -> None:
         super().__init__(source, response_type, **kwargs)
-        self.sync = False
+        self.sync = kwargs.pop("sync", False)
 
     def parse(self, search_mask: str = None, **kwargs):
         """Parse FTP-server recursively
 
         Args:
             search_mask (str, optional): Mask to find specific files. If skipped, matches all files.
-        
+
         kwargs:
             start_folder (str, optional): Folder to parse. Defaults to root folder ('/')
             download_folder (str, optional): Folder where save content of start_folder. Defaults to 'download/'
             max_lvl (int, optional): Maximum depth level. If skipped, start_folder is parsed completely
+            timeout (int, optional): Timeout for establishing connection. Defaults to 10
         """
         self.thread_list = []
         self.port = None
@@ -42,6 +45,8 @@ class FTPParser(BaseParser):
         self.start_folder = kwargs.pop("start_folder", "/")
         self.download_folder = kwargs.pop("download_folder", "download")
         self.max_lvl = kwargs.pop("max_lvl", 0)
+        self.timeout = kwargs.pop("timeout", 10)
+        self.sftp = kwargs.pop("sftp", True)
 
         if search_mask:
             self.search_mask = search_mask
@@ -50,12 +55,13 @@ class FTPParser(BaseParser):
 
         host, port = self.parse_host_address()
         if self.sync:
-            self.connect(host, *port)
+            if self.sftp:
+                self.sync_sftp_getting(host, *port)
+            else:
+                self.sync_getting(host, *port)
         else:
             self.tasks_list = []
-            self.tasks_list.append(self.asyncgetting(host, *port, "MLSD", 0))
-
-        if not self.sync:
+            self.tasks_list.append(self.async_getting(host, *port, "MLSD", 0))
             ioloop = asyncio.get_event_loop()
             try:
                 ioloop.run_until_complete(asyncio.gather(*self.tasks_list))
@@ -64,15 +70,50 @@ class FTPParser(BaseParser):
             except NameError:
                 pass
 
-    def connect(self, host: str, port):
+    def sync_sftp_getting(self, host: str, port: int):
+        host_port = f"{host}:{port}"
+        pathlist = [host_port]
+        try:
+            ssh_client = paramiko.SSHClient()
+            ssh_client.set_missing_host_key_policy(paramiko.WarningPolicy)
+            ssh_client.connect(
+                hostname=host,
+                port=port,
+                username=self.user,
+                password=self.password,
+                timeout=self.timeout,
+            )
+            sftp = ssh_client.open_sftp()
+            try:
+                sftp.chdir(self.start_folder)
+            except FileNotFoundError:
+                err_msg = f"Path {self.start_folder} doesn't exist on server"
+                logger.error(err_msg)
+
+            self.syncnumber = 0
+            self.sftp_cycle(folder="", ftp_client=sftp, pathlist=pathlist)
+
+        except OSError as oerr:
+            if oerr == "timed out":
+                err_msg = f"{host} does not keep a stable connection."
+                logger.error(err_msg)
+                self.results(host, -2)
+            else:
+                logger.error(oerr)
+        except ftplib.error_perm as msg:
+            if msg.args[0][:3] != "530":
+                err_msg = f"Login authentication failed onto {host_port}"
+            else:
+                err_msg = str(msg.args[0][:3])
+            logger.error(err_msg)
+
+    def sync_getting(self, host: str, port: int):
         host_port = f"{host}:{port}"
         pathlist = [host_port]
         try:
             ftp = ftplib.FTP(
                 host=host,
-                user=self.user,
-                passwd=self.password,
-                timeout=10,
+                timeout=self.timeout,
             )
             ftp.connect(port=port)
             ftp.login(user=self.user, passwd=self.password)
@@ -107,66 +148,96 @@ class FTPParser(BaseParser):
                 err_msg = str(msg.args[0][:3])
             logger.error(err_msg)
 
-    def cycle_inner(self, folder: str, ftp: ftplib.FTP, pathlist: list):
-        ftp.cwd(folder)
+    def cycle_inner(self, folder: str, ftp_client: ftplib.FTP, pathlist: list):
+        ftp_client.cwd(folder)
         pathlist.append(folder)
         try:
             for file_name, file_facts in filter(
-                lambda item: item[0] not in [".", ".."], ftp.mlsd()
+                lambda item: item[0] not in [".", ".."], ftp_client.mlsd()
             ):
                 _type = file_facts.get("type")
                 if _type not in ["dir", "pdir", "cdir"]:
-                    self.searching(file_name, ftp, pathlist)
+                    self.searching(file_name, ftp_client, pathlist)
                 elif _type == "dir":
                     try:
-                        self.cycle_inner(file_name, ftp, pathlist)
+                        self.cycle_inner(file_name, ftp_client, pathlist)
                     except ftplib.error_perm:
                         err_msg = f"Cannot open the folder {file_name}"
                         logger.error(err_msg)
                     finally:
-                        self._exit_folder(ftp, pathlist)
+                        self._exit_folder(ftp_client, pathlist)
         except UnicodeDecodeError:
             err_msg = "This server has cyrillic symbols in the files"
             logger.error(err_msg)
-            self.badftp_cycle("", ftp, pathlist)
+            self.badftp_cycle("", ftp_client, pathlist)
 
-    def searching(self, name: str, ftp: ftplib.FTP, pathlist: list):
+    def searching(self, name: str, ftp_client: ftplib.FTP, pathlist: list):
         full_path = Path(*pathlist, name)
         self.syncnumber += 1
         if re.match(self.search_mask, name):
-            self.syncdownload(name, ftp, full_path)
+            self.sync_download(name, ftp_client, full_path)
 
-    def syncdownload(self, name, full_path, ftp: ftplib.FTP) -> None:
+    def sync_download(self, name: str, ftp_client: ftplib.FTP, full_path: str) -> None:
         try:
             logger.info(f"{full_path} downloading...")
             download_folder = Path(self.download_folder, name)
+            os.makedirs(self.download_folder, exist_ok=True)
             fsea = open(download_folder, "wb")
-            ftp.retrbinary(f"RETR {name}", fsea.write, 8 * 1024)
+            ftp_client.retrbinary(f"RETR {name}", fsea.write, 8 * 1024)
             fsea.close()
             logger.info("Ok.")
         except KeyboardInterrupt:
             logger.info("You have interrupted file downloading.")
             pass
 
-    def badftp_cycle(self, file: str, ftp: ftplib.FTP, pathlist: list):
-        ftp.cwd(file)
+    def sftp_download(self, name: str, ftp_client: paramiko.SFTPClient, full_path: str):
+        try:
+            logger.info(f"{full_path} downloading...")
+            download_folder = Path(self.download_folder, name)
+            os.makedirs(self.download_folder, exist_ok=True)
+            ftp_client.get(remotepath=str(full_path), localpath=str(download_folder))
+            logger.info("Ok.")
+        except KeyboardInterrupt:
+            logger.info("You have interrupted file downloading.")
+
+    def badftp_cycle(self, file: str, ftp_client: ftplib.FTP, pathlist: list):
+        ftp_client.cwd(file)
         pathlist.append(file)
-        file_children = ftp.nlst()
+        file_children = ftp_client.nlst()
         if file_children:
             for file_child in file_children:
                 try:
-                    self.badftp_cycle(file_child, ftp, pathlist)
-                    self._exit_folder(ftp, pathlist)
+                    self.badftp_cycle(file_child, ftp_client, pathlist)
+                    self._exit_folder(ftp_client, pathlist)
                 except ftplib.error_perm:
-                    self.searching(file_child, ftp, pathlist)
+                    self.searching(file_child, ftp_client, pathlist)
                     continue
         else:
-            self._exit_folder(ftp, pathlist)
+            self._exit_folder(ftp_client, pathlist)
 
-    async def asyncgetting(self, host, port, command, asyncnumber):
+    def sftp_cycle(self, folder: str, ftp_client: paramiko.SFTPClient, pathlist: list):
+        ftp_client.chdir(folder)
+        pathlist.append(folder)
+        for file in ftp_client.listdir_iter():
+            _type = file.longname[0]
+            if _type == "d":
+                self.sftp_cycle(
+                    folder=file.filename, ftp_client=ftp_client, pathlist=pathlist
+                )
+                ftp_client.chdir("..")
+                pathlist.pop() if len(pathlist) > 1 else None
+            elif _type == "-":
+                full_path = Path(*pathlist, file.filename)
+                self.syncnumber += 1
+                if re.match(self.search_mask, file.filename):
+                    self.sftp_download(
+                        name=file.filename, ftp_client=ftp_client, full_path=full_path
+                    )
+
+    async def async_getting(self, host: str, port: int, command: str, asyncnumber: int):
         try:
             client = aioftp.Client()
-            async with async_timeout.timeout(5):
+            async with async_timeout.timeout(self.timeout):
                 await client.connect(host, port)
                 await client.login(self.user, self.password)
                 try:
@@ -175,7 +246,7 @@ class FTPParser(BaseParser):
                     err_msg = f"Folder {self.start_folder} not found"
                     logger.error(err_msg)
             logger.info(f"{host} started with asynchronous method: {command}")
-            await self._asyncgetting(host, port, command, asyncnumber, client)
+            await self._async_getting(host, port, command, asyncnumber, client)
         except aioftp.StatusCodeError as exerr:
             self._process_status_code_error(host, port, exerr)
         except ConnectionResetError:
@@ -195,7 +266,7 @@ class FTPParser(BaseParser):
                 err_msg = f"{host}:{port} not responding (error 101)"
             logger.error(err_msg)
 
-    async def _asyncgetting(self, host, port, command, asyncnumber, client):
+    async def _async_getting(self, host, port, command, asyncnumber, client):
         try:
             async for path, info in client.list(recursive=True, raw_command=command):
                 if self.max_lvl != 0:
@@ -204,7 +275,7 @@ class FTPParser(BaseParser):
                 if info["type"] == "file":  # it's better than client.is_file(path)
                     if re.match(self.search_mask, Path(path).name):
                         asyncnumber += 1
-                        await self.asyncpreresults(host, port, path, asyncnumber)
+                        await self.async_download(host, port, path, asyncnumber)
             print(host + " was crawled.")
         except aioftp.StatusCodeError as inerr:
             if str(inerr.received_codes) == "('500',)":
@@ -212,7 +283,7 @@ class FTPParser(BaseParser):
                     logger.warning(
                         f"MLSD is not supported on server {self.source}. Trying to use asynchronous LIST"
                     )
-                    await self.asyncgetting(host, port, "LIST", 0)
+                    await self.async_getting(host, port, "LIST", 0)
                 elif "not underst" in str(inerr.info):
                     logger.warning(
                         f"Asynchronous methods is not available on server {self.source}. Trying to use synchronous MLSD"
@@ -233,13 +304,14 @@ class FTPParser(BaseParser):
             else:
                 logger.error(f"{inerr} on {host}")
 
-    async def asyncpreresults(self, host, port, path, asyncnumber):
+    async def async_download(self, host, port, path, asyncnumber):
         full_path = Path(self.source, self.start_folder, path)
         try:
             client2 = aioftp.Client()
             await client2.connect(host, port)
             await client2.login(self.user, self.password)
-            print(f"{full_path} downloading...")
+            logger.info(f"{full_path} downloading...")
+            os.makedirs(full_path, exist_ok=True)
             await client2.download(
                 path,
                 Path(self.download_folder, host, str(path)),
@@ -250,7 +322,7 @@ class FTPParser(BaseParser):
 
     def sync_mlsd(self, host, port):
         t = threading.Thread(
-            target=self.connect,
+            target=self.sync_getting,
             name="Thread " + host + str(port),
             args=(host, port),
         )
