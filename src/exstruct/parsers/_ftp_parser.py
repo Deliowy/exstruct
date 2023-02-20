@@ -26,6 +26,7 @@ class FTPParser(BaseParser):
     def __init__(self, source: str, response_type: str, **kwargs) -> None:
         super().__init__(source, response_type, **kwargs)
         self.sync = kwargs.pop("sync", False)
+        self.sftp = kwargs.pop("sftp", True)
 
     def parse(self, search_mask: str = None, **kwargs):
         """Parse FTP-server recursively
@@ -46,7 +47,6 @@ class FTPParser(BaseParser):
         self.download_folder = kwargs.pop("download_folder", "download")
         self.max_lvl = kwargs.pop("max_lvl", 0)
         self.timeout = kwargs.pop("timeout", 10)
-        self.sftp = kwargs.pop("sftp", True)
 
         if search_mask:
             self.search_mask = search_mask
@@ -97,7 +97,6 @@ class FTPParser(BaseParser):
             if oerr == "timed out":
                 err_msg = f"{host} does not keep a stable connection."
                 logger.error(err_msg)
-                self.results(host, -2)
             else:
                 logger.error(oerr)
         except ftplib.error_perm as msg:
@@ -109,36 +108,28 @@ class FTPParser(BaseParser):
 
     def sync_getting(self, host: str, port: int):
         host_port = f"{host}:{port}"
-        pathlist = [host_port]
+        pathlist = [host]
         try:
             ftp = ftplib.FTP(
                 host=host,
-                timeout=self.timeout,
             )
             ftp.connect(port=port)
             ftp.login(user=self.user, passwd=self.password)
 
-            try:
-                ftp.cwd(self.start_folder)
-            except ftplib.error_perm:
-                err_msg = f"Folder {self.start_folder} not found"
-                logger.error(err_msg)
-
             self.syncnumber = 0
             try:
-                self.cycle_inner("", ftp, pathlist)
+                self.cycle_inner(self.start_folder, ftp, pathlist)
             except ftplib.error_perm as msg:
                 if msg.args[0][:3] == 500:
                     warn_msg = f"MLSD is not supported on server. Trying to use synchronous NLST"
                     logger.warning(warn_msg)
-                    self.badftp_cycle("", ftp, pathlist)
+                    self.badftp_cycle(self.start_folder, ftp, pathlist)
             logger.info(f"{host} was crawled")
             ftp.quit()
         except OSError as oerr:
             if oerr == "timed out":
                 err_msg = f"{host} does not keep a stable connection."
                 logger.error(err_msg)
-                self.results(host, -2)
             else:
                 logger.error(oerr)
         except ftplib.error_perm as msg:
@@ -166,7 +157,7 @@ class FTPParser(BaseParser):
                         logger.error(err_msg)
                     finally:
                         self._exit_folder(ftp_client, pathlist)
-        except UnicodeDecodeError:
+        except ftplib.error_perm:
             err_msg = "This server has cyrillic symbols in the files"
             logger.error(err_msg)
             self.badftp_cycle("", ftp_client, pathlist)
@@ -177,11 +168,11 @@ class FTPParser(BaseParser):
         if re.match(self.search_mask, name):
             self.sync_download(name, ftp_client, full_path)
 
-    def sync_download(self, name: str, ftp_client: ftplib.FTP, full_path: str) -> None:
+    def sync_download(self, name: str, ftp_client: ftplib.FTP, full_path: Path) -> None:
         try:
             logger.info(f"{full_path} downloading...")
-            download_folder = Path(self.download_folder, name)
-            os.makedirs(self.download_folder, exist_ok=True)
+            download_folder = Path(self.download_folder, full_path)
+            os.makedirs(download_folder.parent, exist_ok=True)
             fsea = open(download_folder, "wb")
             ftp_client.retrbinary(f"RETR {name}", fsea.write, 8 * 1024)
             fsea.close()
@@ -266,7 +257,14 @@ class FTPParser(BaseParser):
                 err_msg = f"{host}:{port} not responding (error 101)"
             logger.error(err_msg)
 
-    async def _async_getting(self, host, port, command, asyncnumber, client):
+    async def _async_getting(
+        self,
+        host: str,
+        port: int,
+        command: str,
+        asyncnumber: int,
+        client: aioftp.Client,
+    ):
         try:
             async for path, info in client.list(recursive=True, raw_command=command):
                 if self.max_lvl != 0:
@@ -311,7 +309,7 @@ class FTPParser(BaseParser):
             await client2.connect(host, port)
             await client2.login(self.user, self.password)
             logger.info(f"{full_path} downloading...")
-            os.makedirs(full_path, exist_ok=True)
+            os.makedirs(self.download_folder, exist_ok=True)
             await client2.download(
                 path,
                 Path(self.download_folder, host, str(path)),
