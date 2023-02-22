@@ -41,6 +41,16 @@ class APIParser(BaseParser):
         *args,
         **kwargs,
     ):
+        """Parse data source using each set of request parameters and return total result
+
+        Args:
+            method (str): method used to retrieve data (`GET`, `POST`, etc.)
+            requests_params (typing.Iterable | typing.TextIO, optional): Sets of request parameters to use. Defaults to None.
+            use_params_product (bool, optional): Check to use cartesian product of request parameters. Defaults to False.
+
+        Returns:
+            list: list of request replies
+        """
         self.break_time = kwargs.pop("break_time", 0)
 
         # TODO Описать поведение, если получаемый массив параметров дохуя большой
@@ -74,6 +84,18 @@ class APIParser(BaseParser):
         return recieved_data
 
     async def async_parse(self, method: str, payload: dict, *args, **kwargs):
+        """Make request with given payload
+
+        Args:
+            method (str): method used to make request (`GET`, `POST`, etc.)
+            payload (dict): parameters to add in request
+
+        Raises:
+            ValueError: Raised if passed method isn't supported
+
+        Returns:
+            list: request response
+        """
         url = urllib.parse.urljoin(self.source, kwargs.pop("api_url", ""))
 
         async with aiohttp.ClientSession(
@@ -99,6 +121,18 @@ class APIParser(BaseParser):
         *args,
         **kwargs,
     ):
+        """Make requests with given payloads
+
+        Args:
+            method (str): method used to make requests (`GET`, `POST`, etc.)
+            payloads (typing.Iterable): payloads added to requests
+
+        Raises:
+            ValueError: Raised if passed method isn't supported
+
+        Returns:
+            list: list of requests responses
+        """
         url = urllib.parse.urljoin(self.source, kwargs.pop("api_url", ""))
 
         async with aiohttp.ClientSession(
@@ -117,12 +151,23 @@ class APIParser(BaseParser):
 
         return recieved_data
 
+    @classmethod
     def prepare_payloads(
-        self,
+        cls,
         requests_payloads: typing.Iterable,
         use_params_product: bool,
         batch_size: int,
     ):
+        """Prepare parameters for use in requests
+
+        Args:
+            requests_payloads (typing.Iterable): parameters to use in requests
+            use_params_product (bool): Use cartesian product of request payloads
+            batch_size (int): amount of payloads per batch
+
+        Returns:
+            Iterator[List[dict]]: payloads for requests
+        """
         if use_params_product:
             requests_batches = itertools.product(*requests_payloads)
         else:
@@ -134,7 +179,7 @@ class APIParser(BaseParser):
             requests_batches,
             batch_size,
         )
-        return list(requests_batches)
+        return requests_batches
 
     async def get_many(
         self,
@@ -142,6 +187,16 @@ class APIParser(BaseParser):
         url: str,
         requests_batches: typing.Iterable,
     ):
+        """Make requests to data source using `GET` with given payloads
+
+        Args:
+            session (aiohttp.ClientSession): session with data source
+            url (str): data source address
+            requests_batches (typing.Iterable): requests payloads
+
+        Returns:
+            list: list of recieved responses
+        """
         recieved_data = []
         for batch in requests_batches:
             time.sleep(self.break_time)
@@ -163,6 +218,16 @@ class APIParser(BaseParser):
         url: str,
         query_params: dict,
     ):
+        """Make request to data source using `GET` with given query parameters
+
+        Args:
+            session (aiohttp.ClientSession): session with data source
+            url (str): data source address
+            query_params (dict): parameters to add to query url
+
+        Returns:
+            Any: request response
+        """
         query = (
             urllib.parse.urlencode(query_params, doseq=True) if query_params else None
         )
@@ -176,6 +241,16 @@ class APIParser(BaseParser):
         url: str,
         requests_batches: typing.Iterable,
     ):
+        """Make requests to data source using `POST` with given payloads
+
+        Args:
+            session (aiohttp.ClientSession): session with data source
+            url (str): data source address
+            requests_batches (typing.Iterable): requests payloads
+
+        Returns:
+            list: list of recieved responses
+        """
         results = []
         for batch in requests_batches:
             time.sleep(self.break_time)
@@ -189,6 +264,16 @@ class APIParser(BaseParser):
         url: str,
         payload: typing.Iterable,
     ):
+        """Make request to data source using `POST` with given payload
+
+        Args:
+            session (aiohttp.ClientSession): session with data source
+            url (str): data source address
+            query_params (dict): request payload
+
+        Returns:
+            Any: request response
+        """
         results = await self.fetch(session, "post", url, data=payload)
         return results
 
@@ -198,6 +283,17 @@ class APIParser(BaseParser):
         after=tenacity.after.after_log(logger, _util.logging.WARNING),
     )
     async def fetch(self, session: aiohttp.ClientSession, *args, **kwargs):
+        """Handles connection to given url with passed parameters and processing of request response
+
+        Args:
+            session (aiohttp.ClientSession): session with data source
+
+        Raises:
+            aiohttp.ServerConnectionError: Raises if data source recieved too many requests in a given amount of time
+
+        Returns:
+            str|dict: request response
+        """
         async with session.request(*args, **kwargs) as response:
             if self.response_type.lower() == "json":
                 result = await response.json()
