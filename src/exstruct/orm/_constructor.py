@@ -11,19 +11,23 @@ from ..util import _util
 
 logger = _util.getLogger("exstruct.orm.constructor")
 
+
 class ORMObjectsConstructor(object):
     """Consturctor of ORM classes objects"""
 
     def __init__(
         self,
-        mapping: dict,
         imported_modules: list[str] = None,
         default_orm_package: str = "_generated_classes",
         default_schema: str = None,
     ) -> None:
-        # FIXME Use mapping or remove it
-        self._mapping = mapping
+        """Initialize instance of `ORMObjectConstructor`
 
+        Args:
+            imported_modules (list[str], optional): list of modules where ORM classes are described. Defaults to None.
+            default_orm_package (str, optional): Default name for sub-module containing generated ORM classes. Defaults to "_generated_classes".
+            default_schema (str, optional): Default schema to. Defaults to None.
+        """
         self._imported_modules = imported_modules if imported_modules else []
         self._default_orm_package_name = default_orm_package
         self._default_schema = default_schema
@@ -33,10 +37,20 @@ class ORMObjectsConstructor(object):
         self._used_classes = set()
 
     def clear_instances(self):
+        """Clear created instances of ORM classes"""
         for cls in self._used_classes:
             cls._instances.clear()
 
     def construct(self, document: dict | typing.Iterable[dict], schema: str = None):
+        """Make ORM class instance(s), using given document(s) and schema
+
+        Args:
+            document (dict | typing.Iterable[dict]): document(s) matching existing ORM classes
+            schema (str, optional): Schema to which created ORM classes are attributed. Defaults to None.
+
+        Returns:
+            list: created ORM objects
+        """
         # constructed_objects CAN contain duplicate values
         constructed_objects = self._construct(document, schema)
 
@@ -49,6 +63,18 @@ class ORMObjectsConstructor(object):
         return result
 
     def _construct(self, document: dict | typing.Iterable[dict], schema: str = None):
+        """Make ORM class instance(s), using given document(s) and schema
+
+        Args:
+            document (dict | typing.Iterable[dict]): document(s) matching existing ORM classes
+            schema (str, optional): Schema to which created ORM classes are attributed. Defaults to None.
+
+        Raises:
+            ValueError: Raised if document content is not incapsulated in `dict` with 1 element (`{'doc':document_content}`)
+
+        Returns:
+            typing.Iterable: created ORM objects
+        """
         if isinstance(document, dict) and len(document) > 1:
             err_msg = "Document content must be incapsulated in 'dict' with 1 element. e.g. {'document':document_content}"
             raise ValueError(err_msg)
@@ -75,9 +101,19 @@ class ORMObjectsConstructor(object):
     def create_object(
         self,
         module_name: str,
-        object_args: tuple,
+        object_args: tuple[str, ...],
         parent: sqlalchemy.orm.DeclarativeMeta = None,
     ):
+        """Transform document into ORM object
+
+        Args:
+            module_name (str): Module containing ORM classes
+            object_args (tuple[str, Any]): name of ORM class and values of it's properties
+            parent (sqlalchemy.orm.DeclarativeMeta, optional): Parent of created ORM object . Defaults to None.
+
+        Returns:
+            sqlalchemy.orm.DeclarativeMeta: ORM object containing document's data
+        """
         object_name, object_elements = object_args
 
         columns, children = {}, {}
@@ -105,6 +141,15 @@ class ORMObjectsConstructor(object):
         return new_object
 
     def _create_object(self, module_name: str, class_name: str, **columns):
+        """Handles actual construction of ORM object
+
+        Args:
+            module_name (str): Module containing definitions of ORM classes
+            class_name (str): Name of ORM class
+
+        Returns:
+            sqlalchemy.orm.DeclarativeMeta: Instance of ORM class `class_name`
+        """
         command_arguments = []
         for name, value in columns.items():
             command_arguments.append(f"{name} = {value}")
@@ -117,7 +162,17 @@ class ORMObjectsConstructor(object):
 
         return loc["result"]
 
-    def _prepare_value(self, value):
+    def _prepare_value(
+        self, value: str | int | float | datetime.date | datetime.datetime
+    ):
+        """Prepare value for use in dynamicaly generated ORM object instantiation
+
+        Args:
+            value (str | int | float | datetime.date | datetime.datetime): Value to prepare
+
+        Returns:
+            str | int | float: Prepared value
+        """
         if isinstance(value, str):
             unquoted_value = value.replace('"', "''")
             prepared_value = (
@@ -138,6 +193,12 @@ class ORMObjectsConstructor(object):
         parent: sqlalchemy.orm.DeclarativeMeta,
         child: sqlalchemy.orm.DeclarativeMeta,
     ):
+        """Add relationship between two ORM objects
+
+        Args:
+            parent (sqlalchemy.orm.DeclarativeMeta): Parent of ORM relationship
+            child (sqlalchemy.orm.DeclarativeMeta): Child of ORM relationship
+        """
         relationship_name = f"relationship_{child.__cls_name__}"
         relationship = parent.__getattribute__(relationship_name)
         relationship_ids = [id(item) for item in relationship]
@@ -145,6 +206,12 @@ class ORMObjectsConstructor(object):
             relationship.append(child)
 
     def import_module(self, module_name: str, package_name: str = None):
+        """Add module to global namespace
+
+        Args:
+            module_name (str): Module to import
+            package_name (str, optional): Sub-module where module lies. Defaults to None.
+        """
         if globals().get(module_name, None):
             err_msg = f"Module {module_name} is already imported"
             warnings.warn(err_msg)
@@ -163,20 +230,14 @@ class ORMObjectsConstructor(object):
     def import_modules(
         self, modules_names: typing.Iterable[str], package_name: str = None
     ):
+        """Add modules to global namespace
+
+        Args:
+            modules_names (typing.Iterable[str]): List of modules to import
+            package_name (str, optional): Module where modules-to-import lie. Defaults to None.
+        """
         for module_name in modules_names:
             self.import_module(module_name, package_name)
-
-    @property
-    def mapping(self):
-        return self._mapping
-
-    @mapping.setter
-    def mapping(self, new_mapping: dict):
-        if isinstance(new_mapping, dict):
-            self._mapping = new_mapping
-        else:
-            err_msg = f"Expected 'dict', not '{type(new_mapping)}'"
-            raise TypeError(err_msg)
 
     @property
     def imported_modules(self):
