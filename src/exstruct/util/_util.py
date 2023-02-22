@@ -9,6 +9,15 @@ LOG_DATETIME_FORMAT = "%d-%b-%y %H:%M:%S"
 
 
 def getLogger(logger_name: str, logs_folder: str = None) -> Logger:
+    """Make logger with rotating file handler
+
+    Args:
+        logger_name (str): name for logger
+        logs_folder (str, optional): folder where log files will be. Defaults to None.
+
+    Returns:
+        Logger: logger with rotating file handler
+    """    
     if not logs_folder:
         logs_folder = ".logs"
     os.makedirs(".logs", exist_ok=True)
@@ -58,8 +67,16 @@ def to_var_name(string: str):
 
     return result
 
-
+# TODO Improve naming and possible use-cases
 def normalize_str(string: str):
+    """Normalize string with multiple quotes in it
+
+    Args:
+        string (str): string with quotes
+
+    Returns:
+        str: normalized string
+    """    
     result = string
     if string:
         # Add space before and in-between triple-quote in string to prevent false triple-quote termination
