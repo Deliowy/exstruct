@@ -62,19 +62,19 @@ class XMLExStruct(BaseExStruct):
             logger.info(msg)
 
             xml_json = xml_document.to_json(json_options={"ensure_ascii": False})
-            data_structure = self.__from_json(xml_json)
+            data_structure = self.__from_json(xml_json, structure_name)
 
         finally:
             shutil.rmtree(tmpdir)
 
         return data_structure
 
-    def __from_json(self, content_json: dict):
+    def __from_json(self, content_json: dict, structure_name: str):
         data_structure = {}
 
         if isinstance(content_json, (tuple, list)):
             for json_element in content_json:
-                element_structure = self.parse_json(json_element)
+                element_structure = self.parse_json(json_element, structure_name)
 
                 element_structure_diff = DeepDiff(data_structure, element_structure)
 
@@ -85,18 +85,21 @@ class XMLExStruct(BaseExStruct):
                         element_structure_diff,
                     )
                 else:
-                    data_structure.update(self.parse_json(json_element))
+                    data_structure.update(self.parse_json(json_element, structure_name))
 
         else:
-            data_structure = self.parse_json(content_json)
+            data_structure = self.parse_json(content_json, structure_name)
 
         return data_structure
 
-    def json_parse_json(self, json_entry: dict):
+    def parse_json(self, json_entry: dict, structure_name: str):
         data_structure = {}
 
+        if structure_name is None:
+            structure_name = "entry"
+
         if isinstance(json_entry, dict) and len(json_entry) > 1:
-            json_entry = {"entry": json_entry}
+            json_entry = {structure_name: json_entry}
 
         (json_entry_name,) = tuple(json_entry.keys())
 
