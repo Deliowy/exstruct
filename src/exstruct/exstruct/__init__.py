@@ -5,10 +5,10 @@ from ._xml_exstruct import XMLExStruct
 from ._xsd_exstruct import XSDExStruct
 
 __all__ = [
-    "BaseExStruct",
-    "CSVExStruct",
-    "JSONExStruct",
-    "JSONSchemaExStruct",
-    "XMLExStruct",
-    "XSDExStruct",
+    BaseExStruct,
+    CSVExStruct,
+    JSONExStruct,
+    JSONSchemaExStruct,
+    XMLExStruct,
+    XSDExStruct,
 ]
