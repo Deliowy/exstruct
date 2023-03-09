@@ -1,0 +1,149 @@
+import builtins
+
+import sqlalchemy as alchemy
+import sqlalchemy.orm
+
+
+sql_Base = sqlalchemy.orm.declarative_base()
+
+sqlalchemy.event.listen(sql_Base.metadata, 'before_create', sqlalchemy.DDL("CREATE SCHEMA IF NOT EXISTS {{table_schema}}"))
+sqlalchemy.event.listen(sql_Base.metadata, 'before_create', sqlalchemy.DDL("CREATE SCHEMA IF NOT EXISTS {{table_schema}}_arch"))
+
+#--------------------------------------------------MEMOIZATION  START--------------------------------------------------
+
+class memoize(object):
+    def __init__(self, cls):
+        self.cls = cls
+        self.__dict__.update(cls.__dict__)
+
+        for attr, val in cls.__dict__.items():
+            if builtins.type(val) is builtins.staticmethod:
+                self.__dict__[attr] = val.__func__
+            
+    def __call__(self, *args, **kwargs):
+        key = str(builtins.tuple(kwargs.items()))
+        if key not in self.cls._instances:
+            self.cls._instances[key] = self.cls(*args, **kwargs)
+        return self.cls._instances[key]
+
+    def _clear_instances(self):
+        self.cls._instances.clear()
+
+#--------------------------------------------------MEMOIZATION  END--------------------------------------------------
+
+{% for export_type in tables %}
+
+#--------------------------------------------------{{export_type}} association tables--------------------------------------------------
+
+{% for table in foreign_keys[export_type] %}
+{{export_type}}_{{table}}_association_table = sqlalchemy.Table(
+        '{{assoc_tables_names[(export_type, table)]}}',
+        sql_Base.metadata,
+        sqlalchemy.Column('{{export_type}}_id', sqlalchemy.ForeignKey('{{table_schema}}.{{export_type}}.{{export_type}}_id'), primary_key=True),
+        sqlalchemy.Column('{{table}}_id', sqlalchemy.ForeignKey('{{table_schema}}.{{table}}.{{table}}_id'), primary_key=True),
+        schema = '{{table_schema}}'
+    )
+{% endfor %}
+{% endfor %}
+
+{% for export_type in tables %}
+
+#--------------------------------------------------------{{export_type}} classes--------------------------------------------------------
+
+{% set memoize_check = namespace(only_boolean=true) %}
+{% for column in tables[export_type] %}
+{% if tables[export_type][column]['@collected_info']['type']!='Boolean' %}{% set memoize_check.only_boolean = false%}{% endif %}
+{% endfor %}
+
+{% if tables[export_type] and not memoize_check.only_boolean %}@memoize{% endif %}
+class {{export_type}}(sql_Base):
+    _instances = {{"{}"}}
+    
+    __cls_name__ = "{{export_type}}"
+    __tablename__="{{export_type[:63]}}"
+    __table_args__={{'{'}}"schema": "{{table_schema}}", "extend_existing": True, "comment": """ {{tables_info[export_type]}} """{{'}'}}
+
+
+    {{export_type[:60]}}_id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True, nullable=False)
+    {{export_type[:57]}}_tmstp = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False, default=sqlalchemy.func.now())
+    {% if external_ids[export_type].__len__()%}{{export_type[:56]}}_ext_id = sqlalchemy.Column(sqlalchemy.String, unique=True){% endif %}
+
+
+    {% for column in tables[export_type] %}
+{{column}} = sqlalchemy.Column(sqlalchemy.{{tables[export_type][column]["@collected_info"]['type']}},
+    comment=""" {{tables[export_type][column]["@collected_info"]['annotation']}} """, 
+    doc=""" {{tables[export_type][column]["@collected_info"]['annotation']}} """,
+    )
+    {% endfor %}
+
+
+    {% for relationship in relationships[export_type]%}
+relationship_{{relationship}} = sqlalchemy.orm.relationship(
+        "{{relationship}}",
+        secondary = {% if relationship in foreign_keys[export_type] %}{{export_type}}_{{relationship}}{% else %}{{relationship}}_{{export_type}}{% endif %}_association_table,
+        back_populates = "relationship_{{export_type}}",
+    )
+    {% endfor %}
+
+    def __repr__(self) -> str:
+        return f"{{export_type}}({{export_type[:60]}}_id = {self.{{export_type[:60]}}_id}, {{export_type[:57]}}_tmstp = {self.{{export_type[:57]}}_tmstp}, {% if external_ids[export_type].__len__()%}{{export_type[:56]}}_ext_id={self.{{export_type[:56]}}_ext_id}, {%endif%}{% for column in tables[export_type] %}{{column}} = {self.{{column}}}, {% endfor %})"
+
+{% if external_ids[export_type].__len__()%}
+{{export_type}}_ext_id_func = sqlalchemy.DDL(
+    """
+    CREATE OR REPLACE FUNCTION "{{table_schema}}"."{{export_type[:56]}}_ext_id"()
+    RETURNS trigger AS
+    $ext_id_calc$
+    BEGIN
+        IF (TG_OP = 'INSERT') THEN
+            NEW."{{export_type}}_ext_id" := {% if external_ids[export_type].__len__ == 1 %}CAST(NEW."{{external_ids[export_type][0]}}" AS VARCHAR){% else %}encode(sha512(({% for column_name in external_ids[export_type][:-1] %}NEW."{{column_name}}"||{% endfor %}NEW."{{external_ids[export_type][-1]}}")::bytea), 'hex'){% endif %};
+        ELSIF (TG_OP = 'UPDATE') THEN
+            NEW."{{export_type}}_ext_id" = {% if external_ids[export_type].__len__ == 1 %}NEW."{{external_ids[export_type][0]}}"{% else %}encode(sha512(({% for column_name in external_ids[export_type][:-1] %}NEW."{{column_name}}"||{% endfor %}NEW."{{external_ids[export_type][-1]}}")::bytea), 'hex'){% endif %};
+        END IF;
+        RETURN NEW;
+    END;
+    $ext_id_calc$  LANGUAGE plpgsql;
+    """
+)
+{{export_type}}_ext_id_trigger = sqlalchemy.DDL(
+    """
+    CREATE TRIGGER ext_id_calc
+    BEFORE INSERT OR UPDATE ON "{{table_schema}}"."{{export_type[:63]}}"
+    FOR EACH ROW EXECUTE FUNCTION "{{table_schema}}"."{{export_type[:56]}}_ext_id"();
+    """
+)
+
+sqlalchemy.event.listen(
+    {{export_type}}.__table__, 
+    'after_create', 
+    {{export_type}}_ext_id_func.execute_if(dialect="postgresql")
+)
+sqlalchemy.event.listen(
+    {{export_type}}.__table__, 
+    'after_create', 
+    {{export_type}}_ext_id_trigger.execute_if(dialect="postgresql")
+)
+{% endif %}
+
+class archive_{{export_type}}(sql_Base):
+    __tablename__="{{export_type[:58]}}_arch"
+    __table_args__={{'{'}}"schema": "{{table_schema}}_arch", "extend_existing": True, "comment": "{{export_type}} table archive"{{'}'}}
+
+    {{export_type[:60]}}_id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True, nullable=False)
+    {{export_type[:57]}}_tmstp = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False, default=alchemy.func.now())
+    {{export_type[:52]}}_arch_tmstp = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False, default=alchemy.func.now())
+    {% if external_ids[export_type].__len__()%}{{export_type[:56]}}_ext_id = sqlalchemy.Column(sqlalchemy.String, sqlalchemy.ForeignKey("{{table_schema}}.{{export_type}}.{{export_type[:56]}}_ext_id")){% endif %}
+
+
+    {% for column in tables[export_type] %}
+{{column}} = sqlalchemy.Column(sqlalchemy.{{tables[export_type][column]["@collected_info"]['type']}},
+    comment=""" {{tables[export_type][column]["@collected_info"]['annotation']}} """, 
+    doc=""" {{tables[export_type][column]["@collected_info"]['annotation']}} """,
+    )
+    {% endfor %}
+
+    def __repr__(self) -> str:
+        return f"{{export_type}}_arch({{export_type[:60]}}_id = {self.{{export_type[:60]}}_id}, {{export_type[:57]}}_tmstp = {self.{{export_type[:57]}}_tmstp}, {{export_type[:52]}}_tmstp = {self.{{export_type[:52]}}_arch_tmstp}, {% if external_ids[export_type].__len__()%}{{export_type[:56]}}_ext_id={self.{{export_type[:56]}}}, {%endif%}{% for column in tables[export_type] %}{{column}} = {self.{{column}}}, {% endfor %})"
+
+{% endfor %}
+
