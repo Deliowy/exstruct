@@ -103,11 +103,13 @@ class XMLExStruct(BaseExStruct):
 
         (json_entry_name,) = tuple(json_entry.keys())
 
-        data_structure.update({json_entry_name: self.__json_parse_element(json_entry)})
+        data_structure.update(
+            {json_entry_name: self.parse_element(json_entry, json_entry_name)}
+        )
 
         return data_structure
 
-    def __json_parse_element(self, export_type: dict, key: str):
+    def parse_element(self, export_type: dict, key: str):
         try:
             collected_info_settings = {}
 
@@ -131,16 +133,22 @@ class XMLExStruct(BaseExStruct):
 
             result = {}
 
-            result.update(
-                {
-                    child_element_name: self.__json_parse_element(
-                        export_type[key], child_element_name
-                    )
-                    for child_element_name in export_type[key]
-                }
-                if isinstance(export_type[key], dict)
-                else {}
-            )
+            if isinstance(export_type[key], (list, tuple)):
+                result.update(
+                    {
+                        key: self.parse_element(child_element, key)
+                        for child_element in export_type[key]
+                    }
+                )
+            elif isinstance(export_type[key], dict):
+                result.update(
+                    {
+                        child_element_name: self.parse_element(
+                            export_type[key], child_element_name
+                        )
+                        for child_element_name in export_type[key]
+                    }
+                )
 
             result["@collected_info"] = collected_info_settings
 
