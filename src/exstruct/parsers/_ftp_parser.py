@@ -71,6 +71,9 @@ class FTPParser(BaseParser):
             except NameError:
                 pass
 
+        result_folder = f"{self.download_folder}/{host}"
+        return result_folder
+
     def sync_sftp_getting(self, host: str, port: int):
         """Scrap FTP-server using SFTP Client
 
@@ -342,7 +345,7 @@ class FTPParser(BaseParser):
                     if re.match(self.search_mask, Path(path).name):
                         asyncnumber += 1
                         await self.async_download(host, port, path, asyncnumber)
-            print(host + " was crawled.")
+            logger.info(f"{host} was crawled.")
         except aioftp.StatusCodeError as inerr:
             if str(inerr.received_codes) == "('500',)":
                 if str(inerr.info) == "[' Unknown command.']":
@@ -354,19 +357,19 @@ class FTPParser(BaseParser):
                     logger.warning(
                         f"Asynchronous methods is not available on server {self.source}. Trying to use synchronous MLSD"
                     )
-                    self.sync_mlsd(host, port)
+                    self.sync_getting(host, port)
                 else:
                     logger.error(f"{inerr} on {self.source}")
             elif str(inerr.received_codes) == "('550',)":
                 logger.error(
                     f"Error 550 (Can't check for file existence) with server {self.source}. Trying to use synchronous MLSD."
                 )
-                self.sync_mlsd(host, port)
+                self.sync_getting(host, port)
             elif "Waiting for ('1xx',) but got 501" in str(inerr):
                 logger.error(
                     f"Error 501 (Not a directory) with server {self.source} Trying to use synchronous MLSD"
                 )
-                self.sync_mlsd(host, port)
+                self.sync_getting(host, port)
             else:
                 logger.error(f"{inerr} on {host}")
 
@@ -394,20 +397,21 @@ class FTPParser(BaseParser):
         except aioftp.errors.PathIOError:
             logger.error("Unable to download files. Check out your privileges.")
 
-    def sync_mlsd(self, host: str, port: int):
-        """Scraping of folder at FTP-server using syncronous MLSD and threading
+    # def sync_mlsd(self, host: str, port: int):
+    #     """Scraping of folder at FTP-server using syncronous MLSD and threading
 
-        Args:
-            host (str): host address
-            port (int): host's port to use
-        """
-        t = threading.Thread(
-            target=self.sync_getting,
-            name="Thread " + host + str(port),
-            args=(host, port),
-        )
-        self.thread_list.append(t)
-        t.start()
+    #     Args:
+    #         host (str): host address
+    #         port (int): host's port to use
+    #     """
+    #     thread = threading.Thread(
+    #         target=self.sync_getting,
+    #         name="Thread " + host + str(port),
+    #         args=(host, port),
+    #     )
+    #     self.thread_list.append(thread)
+    #     thread.start()
+    #     thread.join()
 
     def _process_status_code_error(
         self, host: str, port: int, err: aioftp.StatusCodeError
