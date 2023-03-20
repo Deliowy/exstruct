@@ -38,7 +38,7 @@ class BaseDBClient(object):
         results = []
 
         for batch in packages_to_process:
-            results.extend(self._load(batch, *args, **kwargs))
+            results.append(self._load(batch, *args, **kwargs))
 
         return results
 
