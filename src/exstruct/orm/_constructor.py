@@ -36,7 +36,7 @@ class ORMObjectsConstructor(object):
 
         self._used_classes = set()
 
-    def clear_instances(self):
+    def clear_cache(self):
         """Clear created instances of ORM classes"""
         for cls in self._used_classes:
             cls._instances.clear()
@@ -52,7 +52,7 @@ class ORMObjectsConstructor(object):
             list: created ORM objects
         """
         # constructed_objects CAN contain duplicate values
-        constructed_objects = self._construct(document, schema)
+        constructed_objects = list(self._construct(document, schema))
 
         result = []
         result_ids = []
