@@ -56,6 +56,7 @@ class memoize(object):
 {% endfor %}
 
 {% if tables[export_type] and not memoize_check.only_boolean %}@memoize{% endif %}
+
 class {{export_type}}(sql_Base):
     _instances = {{"{}"}}
     

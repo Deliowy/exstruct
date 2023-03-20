@@ -6,10 +6,13 @@ from pathlib import Path
 import jinja2
 import more_itertools
 from deepdiff import grep
+from pkg_resources import resource_filename
 
 from ..util import _util
 
 logger = _util.getLogger("exstruct.orm.generator")
+DEFAULT_TEMPLATE = resource_filename(__name__, "templates/table_classes.py.jinja")
+
 
 class ORMClassGenerator(object):
     """Handles generation of ORM classes with '.jinja' templates"""
@@ -29,7 +32,7 @@ class ORMClassGenerator(object):
         self,
         mapping: dict,
         schema: str,
-        template_path: Path = "./templates/table_classes.py.jinja",
+        template_path: Path = DEFAULT_TEMPLATE,
         mapping_delimiter: str = " -> ",
         classes_save_location: Path = "./_generated_classes/",
     ) -> None:
