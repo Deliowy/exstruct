@@ -1,20 +1,14 @@
-import concurrent.futures
-import json
 import pathlib
 import tempfile
 import typing
-from concurrent.futures import ThreadPoolExecutor
 
 import dateutil
 import dateutil.parser
-import h5py
-import numpy
+import umsgpack
 
 from ..util import _util
 
 logger = _util.getLogger("exstruct.extractor.extractor")
-
-DEFAULT_BATCH_SIZE = 10_000
 
 
 # DONE TODO IMPROVE
@@ -32,58 +26,27 @@ class DataExtractor(object):
         self._mapping = mapping
         self._mapping_delimiter = mapping_delimiter
         self._root_prefix = root_prefix
-        self._batch_size = kwargs.pop("batch_size", DEFAULT_BATCH_SIZE)
 
-    def extract_from_file(self, filename: str):
+    def extract_from_file(self, file: typing.BinaryIO):
         extracted_data_file = tempfile.TemporaryFile(
-            dir=pathlib.Path(filename).parent, delete=False, suffix=".hdf5"
-        )
-        extracted_data_hdf5 = h5py.File(extracted_data_file, "r+")
-        extracted_data_dset = extracted_data_hdf5.create_dataset(
-            "extracted_data",
-            dtype=h5py.string_dtype("utf-8"),
-            shape=(0,),
-            maxshape=(None,),
-            compression="gzip",
-            chunks=(self._batch_size,),
-            shuffle=True,
+            dir=pathlib.Path(file.name).parent, delete=False, suffix=".msgpack"
         )
 
-        file = h5py.File(filename)
-        for key in file.keys():
-            dset = file[key]
-            batch = []
-            processed_data = 0
-            with ThreadPoolExecutor(max_workers=100) as executor:
-                futures_to_extracted_data = [
-                    executor.submit(self.extract, pre_extracted_data)
-                    for pre_extracted_data in map(json.loads, dset)
-                ]
+        processed_data = 0
+        file.seek(0)
+        try:
+            while True:
+                data_batch = umsgpack.load(file)
+                if data_batch:
+                    extracted_data_batch = tuple(self.extract(data_batch))
+                    processed_data += len(extracted_data_batch)
+                    umsgpack.dump(extracted_data_batch, extracted_data_file)
+                else:
+                    logger.error("Empty batch")
+        except umsgpack.InsufficientDataException:
+            info_msg = f"Finished extracting data. Processed {processed_data} documents"
+            logger.info(info_msg)
 
-            for future in concurrent.futures.as_completed(futures_to_extracted_data):
-                extracted_data = future.result()
-                batch.append(
-                    json.dumps(extracted_data, ensure_ascii=False, default=str)
-                )
-                if len(batch) > self._batch_size:
-                    extracted_data_dset.resize((processed_data + self._batch_size,))
-                    extracted_data_dset[processed_data:] = numpy.asarray(
-                        batch[: self._batch_size + 1]
-                    )
-                    processed_data += self._batch_size + 1
-                    extracted_data_dset.flush()
-                    del batch[: self._batch_size + 1]
-
-            if batch:
-                extracted_data_dset.resize((processed_data + len(batch),))
-                extracted_data_dset[processed_data:] = numpy.asarray(batch)
-                extracted_data_dset.flush()
-                processed_data += len(batch)
-                del batch
-
-        file.close()
-        extracted_data_hdf5.flush()
-        extracted_data_hdf5.close()
         return extracted_data_file
 
     def extract(self, content: dict | typing.Iterable[dict]):
