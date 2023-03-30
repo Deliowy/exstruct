@@ -82,7 +82,7 @@ class ORMObjectsConstructor(object):
         if schema is None and self._default_schema:
             schema = self._default_schema
 
-        if isinstance(document, (list, tuple)):
+        if isinstance(document, (list, tuple, map)):
             return itertools.starmap(
                 self._construct, itertools.product(document, (schema,))
             )
@@ -122,7 +122,7 @@ class ORMObjectsConstructor(object):
                 children[key] = value
             else:
                 if value is not None:
-                    columns[key] = self._prepare_value(value)
+                    columns[_util.to_var_name(key)] = self._prepare_value(value)
 
         new_object = self._create_object(module_name, object_name, **columns)
 
