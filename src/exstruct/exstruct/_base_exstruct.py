@@ -69,7 +69,8 @@ class BaseExStruct(abc.ABC):
         self.fill_routes(data_structure)
 
         if file_path:
-            self.save_structure_to_file(data_structure, result_path, encoding="utf-8")
+            self.save_structure_to_file(data_structure, file_path, encoding="utf-8")
+            return data_structure
         else:
             return data_structure
 
