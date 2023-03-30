@@ -61,7 +61,7 @@ class XMLExStruct(BaseExStruct):
             print(msg)
             logger.info(msg)
 
-            xml_json = xml_document.to_json(json_options={"ensure_ascii": False})
+            xml_json = xml_document.decode()
             data_structure = self.__from_json(xml_json, structure_name)
 
         finally:
@@ -104,7 +104,11 @@ class XMLExStruct(BaseExStruct):
         (json_entry_name,) = tuple(json_entry.keys())
 
         data_structure.update(
-            {json_entry_name: self.parse_element(json_entry, json_entry_name)}
+            {
+                json_entry_name: self.parse_element(
+                    json_entry[json_entry_name], json_entry_name
+                )
+            }
         )
 
         return data_structure
@@ -119,8 +123,8 @@ class XMLExStruct(BaseExStruct):
 
             collected_info_settings["type"] = (
                 "object"
-                if isinstance(export_type[key], dict)
-                else self.data_type_mapping[export_type[key].__class__.__name__]
+                if isinstance(export_type, (dict, list, tuple))
+                else self.data_type_mapping[export_type.__class__.__name__]
             )
             collected_info_settings["occurence"] = False
 
@@ -133,20 +137,16 @@ class XMLExStruct(BaseExStruct):
 
             result = {}
 
-            if isinstance(export_type[key], (list, tuple)):
-                result.update(
-                    {
-                        key: self.parse_element(child_element, key)
-                        for child_element in export_type[key]
-                    }
-                )
-            elif isinstance(export_type[key], dict):
+            if isinstance(export_type, (list, tuple)):
+                for child_element in export_type:
+                    result.update(self.parse_element(child_element, key))
+            elif isinstance(export_type, dict):
                 result.update(
                     {
                         child_element_name: self.parse_element(
-                            export_type[key], child_element_name
+                            export_type[child_element_name], child_element_name
                         )
-                        for child_element_name in export_type[key]
+                        for child_element_name in export_type
                     }
                 )
 
