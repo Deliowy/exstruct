@@ -139,7 +139,14 @@ class XMLExStruct(BaseExStruct):
 
             if isinstance(export_type, (list, tuple)):
                 for child_element in export_type:
-                    result.update(self.parse_element(child_element, key))
+                    child_element_structure = self.parse_element(child_element, key)
+                    element_structure_diff = DeepDiff(result, child_element_structure)
+                    if element_structure_diff and result:
+                        self.__json_update_structure(
+                            result, child_element_structure, element_structure_diff
+                        )
+                    else:
+                        result.update(child_element_structure)
             elif isinstance(export_type, dict):
                 result.update(
                     {
