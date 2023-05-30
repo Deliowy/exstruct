@@ -7,14 +7,13 @@ from pathlib import Path
 
 import flatdict
 
-from ..util import _util
-
-logger = _util.getLogger("exstruct.exstruct.base_exstruct")
+from .. import util
 
 
 class BaseExStruct(abc.ABC):
     """Abstract class from which all structure extractors inherit"""
 
+    logger = util.getLogger("exstruct.exstruct.base_exstruct")
     _data_type_priorities = {
         "Integer": 1,
         "Boolean": 1,
@@ -154,7 +153,7 @@ class BaseExStruct(abc.ABC):
 
         # normalization of mapped name according to python naming rules
         field_content = field_content.split(self.mapping_delimiter)
-        field_content[-1] = _util.to_var_name(field_content[-1])
+        field_content[-1] = util.to_var_name(field_content[-1])
         field_content = " -> ".join(field_content)
         self._fill_field(path_components, data_structure, "mapping", field_content)
 

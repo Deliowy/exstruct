@@ -8,15 +8,15 @@ import more_itertools
 from deepdiff import grep
 from pkg_resources import resource_filename
 
-from ..util import _util
+from .. import util
 
-logger = _util.getLogger("exstruct.orm.generator")
 DEFAULT_TEMPLATE = resource_filename(__name__, "templates/table_classes.py.jinja")
 
 
 class ORMClassGenerator(object):
     """Handles generation of ORM classes with '.jinja' templates"""
 
+    logger = util.getLogger("exstruct.orm.generator")
     _data_type_priorities = {
         "Integer": 1,
         "Boolean": 1,

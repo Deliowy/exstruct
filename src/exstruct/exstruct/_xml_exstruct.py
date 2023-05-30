@@ -9,11 +9,11 @@ from deepdiff import DeepDiff
 from ..util import _util
 from ._base_exstruct import BaseExStruct
 
-logger = _util.getLogger("exstruct.exstruct.xml_exstruct")
-
 
 class XMLExStruct(BaseExStruct):
     """Extractor of data structure from XML document"""
+
+    logger = _util.getLogger("exstruct.exstruct.xml_exstruct")
 
     def __init__(
         self,
@@ -56,12 +56,14 @@ class XMLExStruct(BaseExStruct):
                 xsd_schema_content = file.read()
             data_structure = self.__from_xsd(xsd_schema_content)
         except Exception as err:
-            logger.error(err)
+            self.logger.error(err)
             msg = "Не удалось получить схему данных. Структура будет построена только на основе .xml-файла."
             print(msg)
-            logger.info(msg)
+            self.logger.info(msg)
 
-            xml_json = xml_document.decode()
+            xml_json = xml_document.decode(
+                converter=xmlschema.converters.BadgerFishConverter(preserve_root=True)
+            )
             data_structure = self.__from_json(xml_json, structure_name)
 
         finally:
@@ -163,7 +165,7 @@ class XMLExStruct(BaseExStruct):
 
         except Exception as err:
             err_msg = f"Ошибка {err} при парсинге поля '{key}' элемента {export_type}"
-            logger.error(err_msg)
+            self.logger.error(err_msg)
 
     def __json_update_structure(
         self, structure: dict, entry_structure: dict, fields_to_update: DeepDiff

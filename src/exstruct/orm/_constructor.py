@@ -7,13 +7,13 @@ import warnings
 import sqlalchemy.orm
 import sqlalchemy.util
 
-from ..util import _util
-
-logger = _util.getLogger("exstruct.orm.constructor")
+from .. import util
 
 
 class ORMObjectsConstructor(object):
     """Consturctor of ORM classes objects"""
+
+    logger = util.getLogger("exstruct.orm.constructor")
 
     def __init__(
         self,
@@ -52,7 +52,12 @@ class ORMObjectsConstructor(object):
             list: created ORM objects
         """
         # constructed_objects CAN contain duplicate values
-        constructed_objects = list(self._construct(document, schema))
+        if isinstance(document, (list, tuple)):
+            constructed_objects = list(
+                self._construct(document=document, schema=schema)
+            )
+        else:
+            constructed_objects = [self._construct(document=document, schema=schema)]
 
         result = []
         result_ids = []
@@ -122,7 +127,7 @@ class ORMObjectsConstructor(object):
                 children[key] = value
             else:
                 if value is not None:
-                    columns[_util.to_var_name(key)] = self._prepare_value(value)
+                    columns[util.to_var_name(key)] = self._prepare_value(value)
 
         new_object = self._create_object(module_name, object_name, **columns)
 
@@ -154,7 +159,7 @@ class ORMObjectsConstructor(object):
         for name, value in columns.items():
             command_arguments.append(f"{name} = {value}")
         command_arguments_str = ", ".join(command_arguments)
-        command = f"result = {module_name}.{_util.to_var_name(class_name)}({command_arguments_str})"
+        command = f"result = {module_name}.{util.to_var_name(class_name)}({command_arguments_str})"
         compiled_command = compile(command, __file__, "single")
 
         loc = {}

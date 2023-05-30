@@ -56,7 +56,7 @@ def to_var_name(string: str):
     """
     result = string
     if string:
-        result = string.translate(str.maketrans("@ .,-/\\", "_______"))
+        result = string.translate(str.maketrans("@$ .,-/\\", "________"))
 
     if (
         keyword.iskeyword(result)

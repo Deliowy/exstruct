@@ -45,7 +45,7 @@ class APIParser(BaseParser):
 
         Args:
             method (str): method used to retrieve data (`GET`, `POST`, etc.)
-            requests_params (typing.Iterable | typing.TextIO, optional): Sets of request parameters to use. Defaults to None.
+            requests_params (typing.Iterable | typing.TextIO, optional): Sets of request parameters to use. Defaults to None. Params format: `[(key,value1),(key,value2),...]`
             use_params_product (bool, optional): Check to use cartesian product of request parameters. Defaults to False.
 
         Returns:
@@ -203,7 +203,7 @@ class APIParser(BaseParser):
             for query_params in batch:
                 query = (
                     urllib.parse.urlencode(query_params, doseq=True)
-                    if query_params
+                    if any(query_params)
                     else None
                 )
                 recieved_data.append(
@@ -229,7 +229,9 @@ class APIParser(BaseParser):
             Any: request response
         """
         query = (
-            urllib.parse.urlencode(query_params, doseq=True) if query_params else None
+            urllib.parse.urlencode(query_params, doseq=True)
+            if any(query_params)
+            else None
         )
         recieved_data = await self.fetch(session, "get", url, params=query)
 
@@ -298,6 +300,8 @@ class APIParser(BaseParser):
             if self.response_type.lower() == "json":
                 result = await response.json()
             elif self.response_type.lower() == "xml":
+                result = await response.text()
+            else:
                 result = await response.text()
 
             if response.status == 429:

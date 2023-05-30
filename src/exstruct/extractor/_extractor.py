@@ -28,6 +28,16 @@ class DataExtractor(object):
         self._root_prefix = root_prefix
 
     def extract_from_file(self, file: typing.BinaryIO):
+        """Extract data from given file containing `umsgpack` dumps. File will be read from beginning 'till getting `InsufficientDataException`.
+        Extracted data is dumped in temporary file in same directory with given one.
+        Deletition of file with extracted data must be handled separately.
+
+        Args:
+            file (typing.BinaryIO): File-like object, containing `umsgpack` dumps.
+
+        Returns:
+            tempfile._TemporaryFileWrapper: File-like object, containing data extracted from given file. Extracted data is dumped using `umsgpack`.
+        """
         extracted_data_file = tempfile.TemporaryFile(
             dir=pathlib.Path(file.name).parent, delete=False, suffix=".msgpack"
         )
@@ -50,6 +60,17 @@ class DataExtractor(object):
         return extracted_data_file
 
     def extract(self, content: dict | typing.Iterable[dict]):
+        """Extract data from `content` based on mapping
+
+        Args:
+            content (dict | typing.Iterable[dict]): Document data or multiple instances of them
+
+        Raises:
+            ValueError: Raised if passed data is not tree
+
+        Returns:
+            dict: Extracted from passed document data
+        """
         if isinstance(content, dict) and len(content) > 1:
             err_msg = "Data type elements must be incapsulated in a dict"
             raise ValueError(err_msg)
@@ -153,10 +174,7 @@ class DataExtractor(object):
         elif data_type == "Boolean":
             return data_type.lower() == "true"
         elif data_type == "Date" or data_type == "types.TIMESTAMP(timezone=True)":
-            try:
-                date = dateutil.parser.parse(data)
-            except dateutil.parser.ParserError:
-                date = dateutil.parser.isoparse(data)
+            date = dateutil.parser.parse(data, fuzzy=True)
             return date
 
     @property

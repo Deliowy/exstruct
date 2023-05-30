@@ -3,14 +3,14 @@ from pathlib import Path
 
 import xmlschema
 
-from ..util import _util
+from .. import util
 from ._base_exstruct import BaseExStruct
-
-logger = _util.getLogger("exstruct.exstruct.xsd_exstruct")
 
 
 class XSDExStruct(BaseExStruct):
     """Extractor of data structure from XSD schema"""
+
+    logger = util.getLogger("exstruct.exstruct.xsd_exstruct")
 
     def __init__(
         self,
@@ -73,19 +73,19 @@ class XSDExStruct(BaseExStruct):
         collected_info_settings["annotation"] = repr(str(element.annotation))
 
         element_aliases = [
-            _util.normalize_str(element.name),
-            _util.normalize_str(element.local_name),
-            _util.normalize_str(element.prefixed_name),
-            _util.normalize_str(element.qualified_name),
+            util.normalize_str(element.name),
+            util.normalize_str(element.local_name),
+            util.normalize_str(element.prefixed_name),
+            util.normalize_str(element.qualified_name),
         ]
 
         if element.type:
             element_aliases.extend(
                 [
-                    _util.normalize_str(element.type.name),
-                    _util.normalize_str(element.type.local_name),
-                    _util.normalize_str(element.type.prefixed_name),
-                    _util.normalize_str(element.type.qualified_name),
+                    util.normalize_str(element.type.name),
+                    util.normalize_str(element.type.local_name),
+                    util.normalize_str(element.type.prefixed_name),
+                    util.normalize_str(element.type.qualified_name),
                 ]
             )
 
