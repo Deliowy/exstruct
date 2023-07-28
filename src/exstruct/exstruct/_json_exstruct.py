@@ -44,9 +44,7 @@ class JSONSchemaExStruct(BaseExStruct):
         json_elements = json_schema_dict["definitions"]
         structure = {}
         for element_name in json_elements:
-            structure[element_name] = self.parse_element(
-                element_name, json_elements[element_name], ref_resolver
-            )
+            structure[element_name] = self.parse_element(element_name, json_elements[element_name], ref_resolver)
 
         return structure
 
@@ -73,10 +71,9 @@ class JSONSchemaExStruct(BaseExStruct):
         collected_info_settings["type"] = self.data_type_mapping[schema_type["type"]]
 
         collected_info_settings["occurence"] = False
+        collected_info_settings["value_column"] = False
 
-        collected_info_settings["external_id"] = (
-            True if schema_name.lower() in self.external_id_collection else False
-        )
+        collected_info_settings["external_id"] = True if schema_name.lower() in self.external_id_collection else False
 
         collected_info_settings["path"] = ""
         collected_info_settings["mapping"] = ""
@@ -93,9 +90,7 @@ class JSONSchemaExStruct(BaseExStruct):
 
         return result
 
-    def resolve_ref(
-        self, schema_ref: dict, ref_resolver: jsonschema.validators.RefResolver
-    ):
+    def resolve_ref(self, schema_ref: dict, ref_resolver: jsonschema.validators.RefResolver):
         ref = schema_ref["$ref"]
         schema_ref_name, schema_content = ref_resolver.resolve(ref)
         schema_name = schema_ref_name.split("/")[-1]
@@ -140,7 +135,7 @@ class JSONExStruct(BaseExStruct):
 
     def make_structure(
         self,
-        source_content: str,
+        source_content: str | dict | list[dict],
         ignored_fields: typing.Iterable[str] = None,
         ignore_levels: int = 0,
         structure_name: str = None,
@@ -150,7 +145,7 @@ class JSONExStruct(BaseExStruct):
         else:
             self.ignored_fields = []
 
-        content_json = json.loads(source_content)
+        content_json = json.loads(source_content) if isinstance(source_content, str) else source_content
 
         data_structure = {}
 
@@ -206,6 +201,7 @@ class JSONExStruct(BaseExStruct):
                 else self.data_type_mapping[element_content.__class__.__name__]
             )
             collected_info_settings["occurence"] = False
+            collected_info_settings["value_column"] = False
 
             collected_info_settings["external_id"] = (
                 True if element_name.lower() in self.external_id_collection else False
@@ -234,11 +230,10 @@ class JSONExStruct(BaseExStruct):
     def _parse_child_element(self, element_content, result):
         for name, value in element_content.items():
             child_structure = self.parse_element({name: value})
-            result.update(child_structure)
+            child_structure_diff = DeepDiff(result, child_structure)
+            self.update_structure(result, child_structure, child_structure_diff)
 
-    def update_structure(
-        self, structure: dict, entry_structure: dict, fields_to_update: DeepDiff
-    ):
+    def update_structure(self, structure: dict, entry_structure: dict, fields_to_update: DeepDiff):
         for field in fields_to_update:
             if field == "values_changed":
                 affected_fields = fields_to_update[field]

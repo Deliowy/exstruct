@@ -45,6 +45,8 @@ class BaseExStruct(abc.ABC):
         ignored_fields: typing.Iterable[str] = None,
         ignore_levels: int = 0,
         sturcture_name: str = None,
+        *args,
+        **kwargs,
     ):
         if ignore_levels < 0:
             err_msg = "'ignore_levels' must be non-negative number"
@@ -60,10 +62,12 @@ class BaseExStruct(abc.ABC):
         else:
             file_path = self.result_path
 
+        self.converter_sequence = kwargs.pop("converter_sequence", "column")
+        self.converter_all = kwargs.pop("converter_all", "column")
+        self.converter_choice = kwargs.pop("converter_choice", "column")
+
         source_content = self.read_source()
-        data_structure = self.make_structure(
-            source_content, ignored_fields, ignore_levels, sturcture_name
-        )
+        data_structure = self.make_structure(source_content, ignored_fields, ignore_levels, sturcture_name)
 
         self.fill_routes(data_structure)
 

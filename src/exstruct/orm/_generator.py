@@ -76,48 +76,33 @@ class ORMClassGenerator(object):
             self.relationships.setdefault(data_type_name, [])
             self.foreign_keys.setdefault(data_type_name, [])
 
-            data_type_elements = {
-                child_key: data_type_child
-                for child_key, data_type_child in data_type.items()
-            }
+            data_type_elements = {child_key: data_type_child for child_key, data_type_child in data_type.items()}
             data_type_collected_info = data_type_elements.pop("@collected_info")
 
             data_type_elements_settings = {
-                element_key: data_type_elements[element_key]["@collected_info"]
-                for element_key in data_type_elements
+                element_key: data_type_elements[element_key]["@collected_info"] for element_key in data_type_elements
             }
 
-            self.tables_info[data_type_name] = data_type_collected_info["annotation"]
+            self.tables_info[data_type_name] = data_type_collected_info
 
             is_table = lambda key: data_type_elements_settings[key]["type"] == "object"
 
-            columns_names, table_names = more_itertools.partition(
-                is_table, data_type_elements
-            )
+            columns_names, table_names = more_itertools.partition(is_table, data_type_elements)
             columns_names, table_names = tuple(columns_names), tuple(table_names)
 
-            self.__map_columns(
-                {
-                    column_name: data_type_elements[column_name]
-                    for column_name in columns_names
-                }
-            )
+            self.__map_columns({column_name: data_type_elements[column_name] for column_name in columns_names})
 
             data_type_foreign_keys = []
 
             for child_table_name in table_names:
                 data_type_foreign_keys.append(child_table_name)
-                self.list_classes_to_generate(
-                    {child_table_name: data_type_elements[child_table_name]}
-                )
+                self.list_classes_to_generate({child_table_name: data_type_elements[child_table_name]})
 
             self.foreign_keys[data_type_name] = list(
                 set(self.foreign_keys[data_type_name]) | set(data_type_foreign_keys)
             )
 
-            self.relationships[data_type_name] = list(
-                set(self.relationships[data_type_name]) | set(table_names)
-            )
+            self.relationships[data_type_name] = list(set(self.relationships[data_type_name]) | set(table_names))
 
     def __map_columns(self, columns: dict):
         for _, column_settings in columns.items():
@@ -128,24 +113,16 @@ class ORMClassGenerator(object):
             if column_name not in self.classes[column_table]:
                 self.classes[column_table].update({column_name: column_settings})
             else:
-                old_type = self.classes[column_table][column_name]["@collected_info"][
-                    "type"
-                ]
+                old_type = self.classes[column_table][column_name]["@collected_info"]["type"]
                 new_type = column_settings["@collected_info"]["type"]
-                if (
-                    self._data_type_priorities[new_type]
-                    > self._data_type_priorities[old_type]
-                ):
-                    self.classes[column_table][column_name]["@collected_info"][
-                        "type"
-                    ] = new_type
+                if self._data_type_priorities[new_type] > self._data_type_priorities[old_type]:
+                    self.classes[column_table][column_name]["@collected_info"]["type"] = new_type
 
     def reflect_relationships(self):
         for table_name in self.relationships:
-            related_tables = (
-                self.relationships
-                | grep(table_name, match_string=True, case_sensitive=True)
-            ).get("matched_values", [])
+            related_tables = (self.relationships | grep(table_name, match_string=True, case_sensitive=True)).get(
+                "matched_values", []
+            )
 
             for related_table_path in related_tables:
                 related_table_name = re.match(".*'(\S+)'.*", related_table_path)[1]
@@ -160,32 +137,24 @@ class ORMClassGenerator(object):
         for table_name in self.foreign_keys:
             for foreign_key in self.foreign_keys[table_name]:
                 assoc_table_name = f"at_{table_name}_{foreign_key}"
-                self.assoc_tables_names[(table_name, foreign_key)] = assoc_table_name[
-                    :63
-                ]
+                self.assoc_tables_names[(table_name, foreign_key)] = assoc_table_name[:63]
 
     def get_external_ids(self):
         for table_name, table_content in self.classes.items():
             external_ids_names = filter(
-                lambda item_name: table_content[item_name]["@collected_info"][
-                    "external_id"
-                ],
+                lambda item_name: table_content[item_name]["@collected_info"]["external_id"],
                 table_content,
             )
             self.external_ids[table_name] = tuple(external_ids_names)
 
     def render(self, content: dict):
         loader = jinja2.loaders.FileSystemLoader(self.template_path.parent)
-        environment = jinja2.Environment(
-            loader=loader, trim_blocks=True, keep_trailing_newline=True
-        )
+        environment = jinja2.Environment(loader=loader, trim_blocks=True, keep_trailing_newline=True)
         template = environment.get_or_select_template(self.template_path.name)
         rendered_classes = template.render(content)
         return rendered_classes
 
-    def save_rendered_classes_to_file(
-        self, rendered_classes: str, save_location: Path = None
-    ):
+    def save_rendered_classes_to_file(self, rendered_classes: str, save_location: Path = None):
         if save_location:
             classes_save_location = save_location
         else:
@@ -193,9 +162,7 @@ class ORMClassGenerator(object):
 
         os.makedirs(classes_save_location, exist_ok=True)
         open(classes_save_location.joinpath("__init__.py"), "a").close()
-        classes_filepath = classes_save_location.joinpath(
-            f"{self.schema}_generated_classes.py"
-        )
+        classes_filepath = classes_save_location.joinpath(f"{self.schema}_generated_classes.py")
         with classes_filepath.open("w", encoding="utf-8") as classes_file:
             classes_file.write(rendered_classes)
         return classes_filepath

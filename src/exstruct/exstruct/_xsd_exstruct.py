@@ -50,26 +50,36 @@ class XSDExStruct(BaseExStruct):
 
         for root_element in xsd_schema.iterchildren():
             if ignore_levels:
-                data_structure.update(
-                    self.parse_element(root_element, ignore_levels - 1)
-                )
+                data_structure.update(self.parse_element(root_element, ignore_levels - 1))
                 data_structure.pop("@collected_info", None)
             else:
-                data_structure.update(
-                    {root_element.local_name: self.parse_element(root_element)}
-                )
+                data_structure.update({root_element.local_name: self.parse_element(root_element)})
 
         return data_structure
 
-    def parse_element(
-        self, element: xmlschema.validators.XsdElement, ignore_levels: int = 0
-    ):
+    def parse_element(self, element: xmlschema.XsdElement, ignore_levels: int = 0):
         if ignore_levels < 0:
             err_msg = "'ignore_levels' must be non-negative number"
             raise ValueError(err_msg)
 
         collected_info_settings = {}
 
+        self._parse_element_common_info(element, collected_info_settings)
+
+        collected_info_settings["type"] = (
+            self.data_type_mapping[self.get_data_type(element.type)]
+            if (element.type.is_simple() or element.type.has_simple_content())
+            else "object"
+        )
+
+        if element.type.is_simple() or element.type.has_simple_content():
+            result = self._parse_simple_element(element, collected_info_settings, ignore_levels)
+        else:
+            result = self._parse_complex_element(element, collected_info_settings, ignore_levels)
+
+        return result
+
+    def _parse_element_common_info(self, element, collected_info_settings):
         collected_info_settings["annotation"] = repr(str(element.annotation))
 
         element_aliases = [
@@ -100,12 +110,6 @@ class XSDExStruct(BaseExStruct):
         else:
             collected_info_settings["collected_info_type"] = "V"
 
-        collected_info_settings["type"] = (
-            self.data_type_mapping[self.get_data_type(element.type)]
-            if element.type.is_simple() or element.type.has_simple_content()
-            else "object"
-        )
-
         try:
             collected_info_settings["occurence"] = bool(element.min_occurs) or not (
                 element.parent and (element.parent.model == "choice")
@@ -116,15 +120,32 @@ class XSDExStruct(BaseExStruct):
         collected_info_settings["path"] = ""
         collected_info_settings["mapping"] = ""
 
+    def _parse_simple_element(self, element: xmlschema.XsdElement, collected_info_settings: dict, ignore_levels: int):
         result = {}
+
+        group_model = {"sequence": self.converter_sequence, "all": self.converter_all, "choice": self.converter_choice}
+
+        if group_model[element.parent.model] == "table":
+            collected_info_settings["type"] = "object"
+            collected_info_settings["value_column"] = True
+        else:
+            collected_info_settings["type"] = self.data_type_mapping[self.get_data_type(element.type)]
+            collected_info_settings["value_column"] = False
+
+        result["@collected_info"] = collected_info_settings
+
+        return result
+
+    def _parse_complex_element(self, element: xmlschema.XsdElement, collected_info_settings: dict, ignore_levels: int):
+        result = {}
+        collected_info_settings["value_column"] = False
         result["@collected_info"] = collected_info_settings
 
         # Проверка на бесконечную рекурсию
         if element.parent and (element.type == element.parent.parent):
             return result
 
-        element_children = element.iterchildren()
-        for child in element_children:
+        for child in element.iterchildren():
             if ignore_levels:
                 result.update(self.parse_element(child, ignore_levels - 1))
                 result.pop("@collected_info")

@@ -3,6 +3,7 @@ import logging.handlers
 import os
 from logging import Logger
 import keyword
+import string
 
 LOG_MESSAGE_FORMAT = "%(asctime)s - [%(levelname)s] - %(name)s - (%(filename)s).%(funcName)s(%(lineno)d) - %(message)s"
 LOG_DATETIME_FORMAT = "%d-%b-%y %H:%M:%S"
@@ -45,7 +46,7 @@ def getLogger(logger_name: str, logs_folder: str = None) -> Logger:
     return logger
 
 
-def to_var_name(string: str):
+def to_var_name(modified_string: str):
     """Translate given string to viable python variable name
 
     Args:
@@ -54,14 +55,14 @@ def to_var_name(string: str):
     Returns:
         str: string, meeting python variables naming rules
     """
-    result = string
-    if string:
-        result = string.translate(str.maketrans("@$ .,-/\\", "________"))
+    result = modified_string
+    if modified_string:
+        result = modified_string.translate(str.maketrans(f"{string.punctuation} №", "__________________________________"))
 
     if (
         keyword.iskeyword(result)
         or keyword.issoftkeyword(result)
-        or string[0].isdigit()
+        or modified_string[0].isdigit()
     ):
         result = f"_{result}"
 

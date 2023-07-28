@@ -63,6 +63,7 @@ class CSVExStruct(BaseExStruct):
         collected_info_settings["collected_info_type"] = "V"
         collected_info_settings["type"] = self.data_type_mapping[element_data.name]
         collected_info_settings["occurence"] = False
+        collected_info_settings["value_column"] = False
         collected_info_settings["external_id"] = (
             True if element_name.lower() in self.external_id_collection else False
         )

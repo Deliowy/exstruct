@@ -6,6 +6,8 @@ import tenacity
 import tenacity.retry
 from tenacity import retry
 
+from exstruct.util import _util
+
 from ..util import _util
 from ._base_client import BaseDBClient
 
@@ -15,14 +17,8 @@ logger = _util.getLogger("exstruct.dbclient.no_sql")
 class MongoDBClient(BaseDBClient):
     """Handles interaction with MongoDB database"""
 
-    def __init__(
-        self,
-        sync: bool = False,
-        logging_level: int = _util.logging.INFO,
-        *args,
-        **kwargs,
-    ) -> None:
-        super().__init__(sync, logging_level, *args, **kwargs)
+    def __init__(self, db_logger: str = None, logging_level: int = _util.logging.DEBUG, *args, **kwargs) -> None:
+        super().__init__(db_logger, logging_level, *args, **kwargs)
 
     @classmethod
     def get_engine(cls, sync, verbose, *args, **kwargs):
@@ -51,9 +47,7 @@ class MongoDBClient(BaseDBClient):
         return engine
 
     def _load(self, batch: typing.Iterable, *args, **kwargs):
-        database = self.engine[kwargs.pop("database")][
-            kwargs.pop("collection", "public")
-        ]
+        database = self.engine[kwargs.pop("database")][kwargs.pop("collection", "public")]
         result_ids = database.insert_many(batch)
         return result_ids
 

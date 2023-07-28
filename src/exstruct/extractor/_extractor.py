@@ -83,9 +83,7 @@ class DataExtractor(object):
 
         processed_data_type = self.mapping[processed_data_type_name]
         processed_data_type_settings = processed_data_type["@collected_info"]
-        data_type_mapping_name = self._data_type_mapping_name(
-            processed_data_type_settings
-        )
+        data_type_mapping_name = self._data_type_mapping_name(processed_data_type_settings)
 
         extracted_data = {}
 
@@ -94,9 +92,7 @@ class DataExtractor(object):
                 data_container[processed_data_type_name], processed_data_type
             )
         elif processed_data_type_settings["collected_info_type"] == "E":
-            extracted_data[data_type_mapping_name] = (
-                True if data_container[processed_data_type_name] else False
-            )
+            extracted_data[data_type_mapping_name] = True if data_container[processed_data_type_name] else False
         else:
             return extracted_data
 
@@ -106,11 +102,7 @@ class DataExtractor(object):
     def _extract_data(self, content: dict, data_type_mapping: dict):
         data_type_settings = data_type_mapping["@collected_info"]
         data_type_elements = dict(
-            [
-                item
-                for item in data_type_mapping.items()
-                if not item[0].startswith("@collected_info")
-            ]
+            [item for item in data_type_mapping.items() if not item[0].startswith("@collected_info")]
         )
 
         if data_type_settings["collected_info_type"] == None:
@@ -125,25 +117,28 @@ class DataExtractor(object):
             if data_type_settings["type"] == "object" and content is not None:
                 if isinstance(content, list):
                     extracted_data = []
-                    for item in content:
-                        extracted_data.append(
-                            {
-                                self._data_type_mapping_name(
-                                    data_type_elements[key]["@collected_info"]
-                                ): self._extract_data(
-                                    item.get(key, None),
-                                    data_type_elements[key],
-                                )
-                                for key in data_type_elements
-                            }
-                        )
+                    if data_type_settings["value_column"]:
+                        data_type_name = self._data_type_mapping_name(data_type_settings)
+                        for item in content:
+                            extracted_data.append({f"{data_type_name}_value": item})
+                    else:
+                        for item in content:
+                            extracted_data.append(
+                                {
+                                    self._data_type_mapping_name(
+                                        data_type_elements[key]["@collected_info"]
+                                    ): self._extract_data(
+                                        item.get(key, None),
+                                        data_type_elements[key],
+                                    )
+                                    for key in data_type_elements
+                                }
+                            )
                 else:
                     extracted_data = {}
                     for key in data_type_elements:
                         extracted_data[
-                            self._data_type_mapping_name(
-                                data_type_elements[key]["@collected_info"]
-                            )
+                            self._data_type_mapping_name(data_type_elements[key]["@collected_info"])
                         ] = self._extract_data(
                             content.get(key, None),
                             data_type_elements[key],
@@ -151,9 +146,7 @@ class DataExtractor(object):
                 return extracted_data
             else:
                 if isinstance(content, str):
-                    content = self._cast_data_value_to_type(
-                        content, data_type_settings["type"]
-                    )
+                    content = self._cast_data_value_to_type(content, data_type_settings["type"])
 
                 return content
 

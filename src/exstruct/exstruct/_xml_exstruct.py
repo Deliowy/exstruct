@@ -61,9 +61,7 @@ class XMLExStruct(BaseExStruct):
             print(msg)
             self.logger.info(msg)
 
-            xml_json = xml_document.decode(
-                converter=xmlschema.converters.BadgerFishConverter(preserve_root=True)
-            )
+            xml_json = xml_document.decode(converter=xmlschema.converters.BadgerFishConverter(preserve_root=True))
             data_structure = self.__from_json(xml_json, structure_name)
 
         finally:
@@ -105,13 +103,7 @@ class XMLExStruct(BaseExStruct):
 
         (json_entry_name,) = tuple(json_entry.keys())
 
-        data_structure.update(
-            {
-                json_entry_name: self.parse_element(
-                    json_entry[json_entry_name], json_entry_name
-                )
-            }
-        )
+        data_structure.update({json_entry_name: self.parse_element(json_entry[json_entry_name], json_entry_name)})
 
         return data_structure
 
@@ -129,10 +121,9 @@ class XMLExStruct(BaseExStruct):
                 else self.data_type_mapping[export_type.__class__.__name__]
             )
             collected_info_settings["occurence"] = False
+            collected_info_settings["value_column"] = False
 
-            collected_info_settings["external_id"] = (
-                True if key.lower() in self.external_id_collection else False
-            )
+            collected_info_settings["external_id"] = True if key.lower() in self.external_id_collection else False
 
             collected_info_settings["path"] = ""
             collected_info_settings["mapping"] = ""
@@ -144,17 +135,13 @@ class XMLExStruct(BaseExStruct):
                     child_element_structure = self.parse_element(child_element, key)
                     element_structure_diff = DeepDiff(result, child_element_structure)
                     if element_structure_diff and result:
-                        self.__json_update_structure(
-                            result, child_element_structure, element_structure_diff
-                        )
+                        self.__json_update_structure(result, child_element_structure, element_structure_diff)
                     else:
                         result.update(child_element_structure)
             elif isinstance(export_type, dict):
                 result.update(
                     {
-                        child_element_name: self.parse_element(
-                            export_type[child_element_name], child_element_name
-                        )
+                        child_element_name: self.parse_element(export_type[child_element_name], child_element_name)
                         for child_element_name in export_type
                     }
                 )
@@ -167,9 +154,7 @@ class XMLExStruct(BaseExStruct):
             err_msg = f"Ошибка {err} при парсинге поля '{key}' элемента {export_type}"
             self.logger.error(err_msg)
 
-    def __json_update_structure(
-        self, structure: dict, entry_structure: dict, fields_to_update: DeepDiff
-    ):
+    def __json_update_structure(self, structure: dict, entry_structure: dict, fields_to_update: DeepDiff):
         for field in fields_to_update:
             if field == "values_changed":
                 affected_fields = fields_to_update[field]
@@ -212,9 +197,7 @@ class XMLExStruct(BaseExStruct):
         data_structure = {}
 
         for root_element in xsd_schema.iterchildren():
-            data_structure.update(
-                {root_element.local_name: self.xsd_parse_element(root_element)}
-            )
+            data_structure.update({root_element.local_name: self.xsd_parse_element(root_element)})
 
         return data_structure
 
@@ -263,7 +246,7 @@ class XMLExStruct(BaseExStruct):
             )
         except AttributeError as err:
             collected_info_settings["occurence"] = True
-
+        collected_info_settings["value_column"] = False
         collected_info_settings["path"] = ""
         collected_info_settings["mapping"] = ""
 
