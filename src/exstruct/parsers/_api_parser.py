@@ -266,6 +266,17 @@ class APIParser(BaseParser):
             str|dict|bytes: request response
         """
         with session.request(*args, **kwargs) as response:
+            if response.status_code == 429:
+                retry_after = response.headers.get("retry-after", 0)
+                err_msg = f"Too many requests. Trying again after {retry_after} sec"
+                logger.error(err_msg)
+                time.sleep(retry_after)
+                response.raise_for_status()
+
+            if response.status_code != 200:
+                logger.error(f"URL: {response.url}\n Status code: {response.status_code}\n Response: {response.text}")
+                response.raise_for_status()
+
             if self.response_type.lower() == "json":
                 result = response.json()
             elif self.response_type.lower() == "xml":
@@ -273,10 +284,6 @@ class APIParser(BaseParser):
             else:
                 result = response.content
 
-            if response.status_code == 429:
-                err_msg = f'Too many requests. Try again after {response.headers.get("retry-after", None)} sec'
-                logger.error(err_msg)
-                raise requests.exceptions.ConnectionError(err_msg)
         return result
 
 
@@ -552,6 +559,17 @@ class AsyncAPIParser(APIParser):
             str|dict: request response
         """
         async with session.request(*args, **kwargs) as response:
+            if response.status == 429:
+                retry_after = response.headers.get("retry-after", 0)
+                err_msg = f"Too many requests. Trying again after {retry_after} sec"
+                logger.error(err_msg)
+                time.sleep(retry_after)
+                response.raise_for_status()
+
+            if response.status !=200:
+                logger.error(f"URL: {response.url}\n Status code: {response.status}\n Response: {response.text()}")
+                response.raise_for_status()
+            
             if self.response_type.lower() == "json":
                 result = await response.json()
             elif self.response_type.lower() == "xml":
@@ -559,8 +577,4 @@ class AsyncAPIParser(APIParser):
             else:
                 result = await response.read()
 
-            if response.status == 429:
-                err_msg = f'Too many requests. Try again after {response.headers.get("retry-after", None)} sec'
-                logger.error(err_msg)
-                raise aiohttp.ServerConnectionError(err_msg)
         return result

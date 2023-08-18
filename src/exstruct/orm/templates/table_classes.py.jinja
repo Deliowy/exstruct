@@ -1,12 +1,13 @@
 import builtins
 
-import sqlalchemy as alchemy
+import sqlalchemy
 import sqlalchemy.orm
 
 
 sql_Base = sqlalchemy.orm.declarative_base()
 
 sqlalchemy.event.listen(sql_Base.metadata, 'before_create', sqlalchemy.DDL("CREATE SCHEMA IF NOT EXISTS {{table_schema}}"))
+sqlalchemy.event.listen(sql_Base.metadata, 'before_create', sqlalchemy.DDL("CREATE SCHEMA IF NOT EXISTS sys"))
 sqlalchemy.event.listen(sql_Base.metadata, 'before_create', sqlalchemy.DDL("CREATE SCHEMA IF NOT EXISTS {{table_schema}}_arch"))
 
 #--------------------------------------------------MEMOIZATION  START--------------------------------------------------
@@ -39,8 +40,8 @@ class memoize(object):
 {{export_type}}_{{table}}_association_table = sqlalchemy.Table(
         '{{assoc_tables_names[(export_type, table)]}}',
         sql_Base.metadata,
-        sqlalchemy.Column('{{export_type}}_id', sqlalchemy.ForeignKey('{{table_schema}}.{{export_type}}.{{export_type}}_id'), primary_key=True),
-        sqlalchemy.Column('{{table}}_id', sqlalchemy.ForeignKey('{{table_schema}}.{{table}}.{{table}}_id'), primary_key=True),
+        sqlalchemy.Column('{% if export_type==table %}parent_{% endif %}{{export_type[:53]}}_id', sqlalchemy.ForeignKey('{{table_schema}}.{{export_type[:63]}}.{{export_type[:60]}}_id'), primary_key=True),
+        sqlalchemy.Column('{{table[:60]}}_id', sqlalchemy.ForeignKey('{{table_schema}}.{{table[:63]}}.{{table[:60]}}_id'), primary_key=True),
         schema = '{{table_schema}}'
     )
 {% endfor %}
@@ -62,13 +63,14 @@ class {{export_type}}(sql_Base):
     
     __cls_name__ = "{{export_type}}"
     __tablename__="{{export_type[:63]}}"
-    __table_args__={{'{'}}"schema": "{{table_schema}}", "extend_existing": True, "comment": """ {{tables_info[export_type]}} """{{'}'}}
+    __table_args__={{'{'}}"schema": "{{table_schema}}", "extend_existing": True, "comment": """ {{tables_info[export_type]['annotation']}} """{{'}'}}
 
 
     {{export_type[:60]}}_id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True, nullable=False)
-    {{export_type[:57]}}_tmstp = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False, default=sqlalchemy.func.now())
+    {{export_type[:57]}}_tmstp = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False, default=sqlsqlalchemy.func.now())
     {% if external_ids[export_type].__len__()%}{{export_type[:56]}}_ext_id = sqlalchemy.Column(sqlalchemy.String, unique=True){% endif %}
 
+    {%if tables_info[export_type]['value_column']%}{{export_type[:57]}}_value = sqlalchemy.Column(sqlalchemy.String){%endif%}
 
     {% for column in tables[export_type] %}
 {{column}} = sqlalchemy.Column(sqlalchemy.{{tables[export_type][column]["@collected_info"]['type']}},
@@ -131,8 +133,8 @@ class archive_{{export_type}}(sql_Base):
     __table_args__={{'{'}}"schema": "{{table_schema}}_arch", "extend_existing": True, "comment": "{{export_type}} table archive"{{'}'}}
 
     {{export_type[:60]}}_id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True, nullable=False)
-    {{export_type[:57]}}_tmstp = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False, default=alchemy.func.now())
-    {{export_type[:52]}}_arch_tmstp = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False, default=alchemy.func.now())
+    {{export_type[:57]}}_tmstp = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False, default=sqlalchemy.func.now())
+    {{export_type[:52]}}_arch_tmstp = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False, default=sqlalchemy.func.now())
     {% if external_ids[export_type].__len__()%}{{export_type[:56]}}_ext_id = sqlalchemy.Column(sqlalchemy.String, sqlalchemy.ForeignKey("{{table_schema}}.{{export_type}}.{{export_type[:56]}}_ext_id")){% endif %}
 
 
@@ -148,3 +150,13 @@ class archive_{{export_type}}(sql_Base):
 
 {% endfor %}
 
+class ImportLog(sql_Base):
+    __tablename__="import_log"
+    __table_args__={'schema':'sys', "extend_existing":True, "comment":"Системные логи импорта данных"}
+
+    import_log_id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True, nullable=False)
+    import_log_tmstp = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False, default=sqlalchemy.func.now())
+
+    schema = sqlalchemy.Column(sqlalchemy.String, comment='Схема, содержащая импортированные данные', doc='Схема, содержащая импортированные данные')
+    status = sqlalchemy.Column(sqlalchemy.String, comment='Статус выполнения импорта', doc='Статус выполнения импорта')
+    inserted = sqlalchemy.Column(sqlalchemy.Integer, comment='Количество загруженных документов', doc='Количество загруженных документов')
