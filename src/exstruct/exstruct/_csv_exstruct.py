@@ -7,8 +7,6 @@ import pandas
 from ..util import _util
 from ._base_exstruct import BaseExStruct
 
-logger = _util.getLogger("exstruct.exstruct.csv_exstruct")
-
 
 class CSVExStruct(BaseExStruct):
     """Extractor of data structure from CSV file"""
@@ -64,9 +62,7 @@ class CSVExStruct(BaseExStruct):
         collected_info_settings["type"] = self.data_type_mapping[element_data.name]
         collected_info_settings["occurence"] = False
         collected_info_settings["value_column"] = False
-        collected_info_settings["external_id"] = (
-            True if element_name.lower() in self.external_id_collection else False
-        )
+        collected_info_settings["external_id"] = True if element_name.lower() in self.external_id_collection else False
         collected_info_settings["path"] = ""
         collected_info_settings["mapping"] = ""
         return collected_info_settings

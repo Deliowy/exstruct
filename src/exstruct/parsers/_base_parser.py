@@ -2,9 +2,8 @@ import abc
 
 from ..util import _util
 
-logger = _util.getLogger("exstruct.parser.base_parser")
-
 PARSER_BATCH_SIZE = 10000
+
 
 class BaseParser(abc.ABC):
     """Prototype class, decsribing common methods and parameters of all parsers"""
@@ -23,6 +22,7 @@ class BaseParser(abc.ABC):
         self._response_type = response_type
         self._user = kwargs.pop("user", None)
         self._password = kwargs.pop("password", None)
+        self.logger = _util.getLogger(f"{self.__module__}.{self.__class__.__name__}")
 
     @abc.abstractmethod
     def parse(self):

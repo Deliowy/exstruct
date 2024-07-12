@@ -5,9 +5,6 @@ import more_itertools
 
 from ..util import _util
 
-logger = _util.getLogger("exstruct.dbclient.base_client")
-
-
 class BaseDBClient(object):
     """Prototype class for intercations with databases"""
 
@@ -23,13 +20,12 @@ class BaseDBClient(object):
         self.logging_level = logging_level
         self._engine = self.get_engine(**kwargs)
         self._engine_kwargs = kwargs
+        self.logger = _util.getLogger(f"{self.__module__}.{self.__class__.__name__}")
 
         if self.verbose:
             self.logging_level = _util.logging.INFO
 
-    def batch_load(
-        self, package: typing.Iterable, batch_size: int = None, *args, **kwargs
-    ):
+    def batch_load(self, package: typing.Iterable, batch_size: int = None, *args, **kwargs):
         if batch_size:
             packages_to_process = more_itertools.batched(package, batch_size)
         else:

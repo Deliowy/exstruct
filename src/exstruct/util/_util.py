@@ -4,6 +4,10 @@ import os
 from logging import Logger
 import keyword
 import string
+from transliterate.contrib.languages.ru.translit_language_pack import RussianLanguagePack
+import transliterate.base
+transliterate.base.registry.register(RussianLanguagePack)
+
 
 LOG_MESSAGE_FORMAT = "%(asctime)s - [%(levelname)s] - %(name)s - (%(filename)s).%(funcName)s(%(lineno)d) - %(message)s"
 LOG_DATETIME_FORMAT = "%d-%b-%y %H:%M:%S"
@@ -18,7 +22,7 @@ def getLogger(logger_name: str, logs_folder: str = None) -> Logger:
 
     Returns:
         Logger: logger with rotating file handler
-    """    
+    """
     if not logs_folder:
         logs_folder = ".logs"
     os.makedirs(".logs", exist_ok=True)
@@ -55,9 +59,13 @@ def to_var_name(modified_string: str):
     Returns:
         str: string, meeting python variables naming rules
     """
-    result = modified_string
+    result = transliterate.translit(modified_string, "ru", reversed=True)
     if modified_string:
-        result = modified_string.translate(str.maketrans(f"{string.punctuation} №", "__________________________________"))
+        result = result.translate(
+            str.maketrans(
+                f"{string.punctuation} №", "__________________________________"
+            )
+        )
 
     if (
         keyword.iskeyword(result)
@@ -68,6 +76,7 @@ def to_var_name(modified_string: str):
 
     return result
 
+
 # TODO Improve naming and possible use-cases
 def normalize_str(string: str):
     """Normalize string with multiple quotes in it
@@ -77,7 +86,7 @@ def normalize_str(string: str):
 
     Returns:
         str: normalized string
-    """    
+    """
     result = string
     if string:
         # Add space before and in-between triple-quote in string to prevent false triple-quote termination

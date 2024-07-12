@@ -10,8 +10,6 @@ from ._base_exstruct import BaseExStruct
 class XSDExStruct(BaseExStruct):
     """Extractor of data structure from XSD schema"""
 
-    logger = util.getLogger("exstruct.exstruct.xsd_exstruct")
-
     def __init__(
         self,
         data_type_mapping: dict,

@@ -1,7 +1,6 @@
 from ..util import _util
 from ._base_parser import BaseParser
 
-logger = _util.getLogger("exstruct.parser.web_parser")
 
 class WebParser(BaseParser):
     """Parser for data-sources that provide data via web-pages"""

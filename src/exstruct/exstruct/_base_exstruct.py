@@ -13,7 +13,6 @@ from .. import util
 class BaseExStruct(abc.ABC):
     """Abstract class from which all structure extractors inherit"""
 
-    logger = util.getLogger("exstruct.exstruct.base_exstruct")
     _data_type_priorities = {
         "Integer": 1,
         "Boolean": 1,
@@ -39,12 +38,14 @@ class BaseExStruct(abc.ABC):
         self._ignored_fields = []
         self._result_path = result_path
 
+        self.logger = util.getLogger(f"{self.__module__}.{self.__class__.__name__}")
+
     def extract_structure(
         self,
         result_path: Path = None,
         ignored_fields: typing.Iterable[str] = None,
         ignore_levels: int = 0,
-        sturcture_name: str = None,
+        structure_name: str = None,
         *args,
         **kwargs,
     ):
@@ -67,7 +68,7 @@ class BaseExStruct(abc.ABC):
         self.converter_choice = kwargs.pop("converter_choice", "column")
 
         source_content = self.read_source()
-        data_structure = self.make_structure(source_content, ignored_fields, ignore_levels, sturcture_name)
+        data_structure = self.make_structure(source_content, ignored_fields, ignore_levels, structure_name)
 
         self.fill_routes(data_structure)
 
@@ -101,9 +102,7 @@ class BaseExStruct(abc.ABC):
             bool
         """
         for ignored_field in self.ignored_fields:
-            is_ignored_field = [
-                alias.lower().find(ignored_field.lower()) != -1 for alias in aliases
-            ]
+            is_ignored_field = [alias.lower().find(ignored_field.lower()) != -1 for alias in aliases]
             if any(is_ignored_field):
                 return True
 
@@ -131,11 +130,7 @@ class BaseExStruct(abc.ABC):
         """
         paths = filter(
             lambda x: x.endswith("@collected_info -> path"),
-            tuple(
-                flatdict.FlatDict(
-                    data_structure, delimiter=self.mapping_delimiter
-                ).keys()
-            ),
+            tuple(flatdict.FlatDict(data_structure, delimiter=self.mapping_delimiter).keys()),
         )
         with ThreadPoolExecutor(max_workers=100) as executor:
             futures_to_process = [
@@ -168,15 +163,11 @@ class BaseExStruct(abc.ABC):
         filed_name: str,
         field_content: str,
     ):
-        command = (
-            f"data_structure['{path_components}']['{filed_name}'] = '{field_content}'"
-        )
+        command = f"data_structure['{path_components}']['{filed_name}'] = '{field_content}'"
         compiled_command = compile(command, __file__, "single")
         exec(compiled_command)
 
-    def save_structure_to_file(
-        self, structure: dict, result_path: Path = None, *args, **kwargs
-    ):
+    def save_structure_to_file(self, structure: dict, result_path: Path = None, *args, **kwargs):
         with result_path.open("w", **kwargs) as result_file:
             json.dump(structure, result_file, ensure_ascii=False)
 

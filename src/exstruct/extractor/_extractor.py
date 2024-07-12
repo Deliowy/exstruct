@@ -8,8 +8,6 @@ import umsgpack
 
 from ..util import _util
 
-logger = _util.getLogger("exstruct.extractor.extractor")
-
 
 # DONE TODO IMPROVE
 class DataExtractor(object):
@@ -26,6 +24,7 @@ class DataExtractor(object):
         self._mapping = mapping
         self._mapping_delimiter = mapping_delimiter
         self._root_prefix = root_prefix
+        self.logger = _util.getLogger(f"{self.__module__}.{self.__class__.__name__}")
 
     def extract_from_file(self, file: typing.BinaryIO):
         """Extract data from given file containing `umsgpack` dumps. File will be read from beginning 'till getting `InsufficientDataException`.
@@ -52,10 +51,10 @@ class DataExtractor(object):
                     processed_data += len(extracted_data_batch)
                     umsgpack.dump(extracted_data_batch, extracted_data_file)
                 else:
-                    logger.error("Empty batch")
+                    self.logger.error("Empty batch")
         except umsgpack.InsufficientDataException:
             info_msg = f"Finished extracting data. Processed {processed_data} documents"
-            logger.info(info_msg)
+            self.logger.info(info_msg)
 
         return extracted_data_file
 
@@ -92,7 +91,7 @@ class DataExtractor(object):
                 data_container[processed_data_type_name], processed_data_type
             )
         elif processed_data_type_settings["collected_info_type"] == "E":
-            extracted_data[data_type_mapping_name] = True if data_container[processed_data_type_name] else False
+            extracted_data[data_type_mapping_name] = True if data_container.get(processed_data_type_name) else False
         else:
             return extracted_data
 
@@ -110,7 +109,7 @@ class DataExtractor(object):
 
         if data_type_settings["occurence"] and content is None:
             err_msg = f"Отсутствует значение для обязательного поля, Aliases = {data_type_settings['aliases']}"
-            logger.debug(f"{err_msg}")
+            self.logger.debug(f"{err_msg}")
 
         if data_type_settings["collected_info_type"] == "V":
             # Проверка на достижение элемента базового типа

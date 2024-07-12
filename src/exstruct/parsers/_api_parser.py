@@ -15,8 +15,6 @@ from tenacity import retry
 from ..util import _util
 from ._base_parser import PARSER_BATCH_SIZE, BaseParser
 
-logger = _util.getLogger("exstruct.parser.api_parser")
-
 
 class APIParser(BaseParser):
     """Parser for data-sources that provide data via API (REST or another)"""
@@ -37,6 +35,8 @@ class APIParser(BaseParser):
             self.auth = requests.auth.HTTPBasicAuth(self.user, self.password)
         else:
             self.auth = None
+
+        self.retry_condition = kwargs.pop("retry_condition", API_retry_if_status_code())
 
     def parse(self, method: str, request_params: dict = None, *args, **kwargs):
         """Parse data from API
@@ -180,7 +180,11 @@ class APIParser(BaseParser):
         for batch in requests_batches:
             time.sleep(self.break_time)
             for query_params in batch:
-                query = urllib.parse.urlencode(query_params, doseq=True) if any(query_params) else None
+                query = (
+                    urllib.parse.urlencode(query_params, doseq=True)
+                    if any(query_params)
+                    else None
+                )
                 recieved_data.append(self.fetch(session, "get", url, params=query))
 
         return recieved_data
@@ -201,7 +205,11 @@ class APIParser(BaseParser):
         Returns:
             Any: request response
         """
-        query = urllib.parse.urlencode(query_params, doseq=True) if any(query_params) else None
+        query = (
+            urllib.parse.urlencode(query_params, doseq=True)
+            if any(query_params)
+            else None
+        )
         recieved_data = self.fetch(session, "get", url, params=query)
 
         return recieved_data
@@ -248,11 +256,6 @@ class APIParser(BaseParser):
         results = self.fetch(session, "post", url, data=payload)
         return results
 
-    @retry(
-        wait=tenacity.wait.wait_random_exponential(),
-        stop=tenacity.stop.stop_after_attempt(5),
-        after=tenacity.after.after_log(logger, _util.logging.WARNING),
-    )
     def fetch(self, session: requests.Session, *args, **kwargs):
         """Handles connection to given url with passed parameters and processing of request response
 
@@ -265,26 +268,38 @@ class APIParser(BaseParser):
         Returns:
             str|dict|bytes: request response
         """
-        with session.request(*args, **kwargs) as response:
-            if response.status_code == 429:
-                retry_after = response.headers.get("retry-after", 0)
-                err_msg = f"Too many requests. Trying again after {retry_after} sec"
-                logger.error(err_msg)
-                time.sleep(retry_after)
-                response.raise_for_status()
 
-            if response.status_code != 200:
-                logger.error(f"URL: {response.url}\n Status code: {response.status_code}\n Response: {response.text}")
-                response.raise_for_status()
+        @retry(
+            retry=self.retry_condition,
+            wait=tenacity.wait.wait_random_exponential(),
+            stop=tenacity.stop.stop_after_attempt(5),
+            after=tenacity.after.after_log(self.logger, _util.logging.WARNING),
+        )
+        def fetch_wrapper():
+            with session.request(*args, **kwargs) as response:
+                if response.status_code == requests.codes.too_many:
+                    retry_after = response.headers.get("retry-after", 0)
+                    err_msg = f"Too many requests. Trying again after {retry_after} sec"
+                    self.logger.error(err_msg)
+                    time.sleep(int(retry_after))
+                    response.raise_for_status()
 
-            if self.response_type.lower() == "json":
-                result = response.json()
-            elif self.response_type.lower() == "xml":
-                result = response.text
-            else:
-                result = response.content
+                if response.status_code != requests.codes.ok:
+                    self.logger.error(
+                        f"URL: {response.url}\n Status code: {response.status_code}\n Response: {response.text}"
+                    )
+                    response.raise_for_status()
 
-        return result
+                if self.response_type.lower() == "json":
+                    result = response.json()
+                elif self.response_type.lower() == "xml":
+                    result = response.text
+                else:
+                    result = response.content
+
+            return result
+
+        return fetch_wrapper()
 
 
 class AsyncAPIParser(APIParser):
@@ -306,6 +321,8 @@ class AsyncAPIParser(APIParser):
             self.auth = aiohttp.BasicAuth(self.user, self.password, encoding="utf-8")
         else:
             self.auth = None
+
+        self.retry_condition = kwargs.pop("retry_condition", API_retry_if_status_code())
 
     def parse(self, method, request_params: dict = None, *args, **kwargs):
         """Parse data from API
@@ -473,8 +490,14 @@ class AsyncAPIParser(APIParser):
         for batch in requests_batches:
             time.sleep(self.break_time)
             for query_params in batch:
-                query = urllib.parse.urlencode(query_params, doseq=True) if any(query_params) else None
-                recieved_data.append(await self.fetch(session, "get", url, params=query))
+                query = (
+                    urllib.parse.urlencode(query_params, doseq=True)
+                    if any(query_params)
+                    else None
+                )
+                recieved_data.append(
+                    await self.fetch(session, "get", url, params=query)
+                )
 
         return recieved_data
 
@@ -494,7 +517,11 @@ class AsyncAPIParser(APIParser):
         Returns:
             Any: request response
         """
-        query = urllib.parse.urlencode(query_params, doseq=True) if any(query_params) else None
+        query = (
+            urllib.parse.urlencode(query_params, doseq=True)
+            if any(query_params)
+            else None
+        )
         recieved_data = await self.fetch(session, "get", url, params=query)
 
         return recieved_data
@@ -541,11 +568,6 @@ class AsyncAPIParser(APIParser):
         results = await self.fetch(session, "post", url, data=payload)
         return results
 
-    @retry(
-        wait=tenacity.wait.wait_random_exponential(),
-        stop=tenacity.stop.stop_after_attempt(5),
-        after=tenacity.after.after_log(logger, _util.logging.WARNING),
-    )
     async def fetch(self, session: aiohttp.ClientSession, *args, **kwargs):
         """Handles connection to given url with passed parameters and processing of request response
 
@@ -558,23 +580,63 @@ class AsyncAPIParser(APIParser):
         Returns:
             str|dict: request response
         """
-        async with session.request(*args, **kwargs) as response:
-            if response.status == 429:
-                retry_after = response.headers.get("retry-after", 0)
-                err_msg = f"Too many requests. Trying again after {retry_after} sec"
-                logger.error(err_msg)
-                time.sleep(retry_after)
-                response.raise_for_status()
 
-            if response.status !=200:
-                logger.error(f"URL: {response.url}\n Status code: {response.status}\n Response: {response.text()}")
-                response.raise_for_status()
-            
-            if self.response_type.lower() == "json":
-                result = await response.json()
-            elif self.response_type.lower() == "xml":
-                result = await response.text()
-            else:
-                result = await response.read()
+        @retry(
+            retry=self.retry_condition,
+            wait=tenacity.wait.wait_random_exponential(),
+            stop=tenacity.stop.stop_after_attempt(5),
+            after=tenacity.after.after_log(self.logger, _util.logging.WARNING),
+        )
+        async def fetch_wrapper():
+            async with session.request(*args, **kwargs) as response:
+                if response.status == 429:
+                    retry_after = response.headers.get("retry-after", 0)
+                    err_msg = f"Too many requests. Trying again after {retry_after} sec"
+                    self.logger.error(err_msg)
+                    time.sleep(int(retry_after))
+                    response.raise_for_status()
 
-        return result
+                if response.status != 200:
+                    self.logger.error(
+                        f"URL: {response.url}\n Status code: {response.status}\n Response: {response.text()}"
+                    )
+                    response.raise_for_status()
+
+                if self.response_type.lower() == "json":
+                    result = await response.json()
+                elif self.response_type.lower() == "xml":
+                    result = await response.text()
+                else:
+                    result = await response.read()
+
+            return result
+
+        return await fetch_wrapper()
+
+
+class API_retry_if_status_code(tenacity.retry_base):
+    def __init__(self, *status_codes: tuple[requests.structures.LookupDict]) -> None:
+        super().__init__()
+        self.status_codes = status_codes if status_codes else ()
+
+    def __call__(self, retry_state: tenacity.RetryCallState) -> bool:
+        exception = retry_state.outcome.exception()
+        if issubclass(exception.__class__, Exception):
+            if_retry = int(exception.response.status_code) in self.status_codes
+        else:
+            if_retry = False
+        return if_retry
+
+
+class API_retry_if_not_status_code(tenacity.retry_base):
+    def __init__(self, *status_codes: tuple[requests.structures.LookupDict]) -> None:
+        super().__init__()
+        self.status_codes = status_codes if status_codes else ()
+
+    def __call__(self, retry_state: tenacity.RetryCallState) -> bool:
+        exception = retry_state.outcome.exception()
+        if issubclass(exception.__class__, Exception):
+            if_retry = int(exception.response.status_code) not in self.status_codes
+        else:
+            if_retry = False
+        return if_retry

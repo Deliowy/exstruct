@@ -4,6 +4,7 @@ import itertools
 import typing
 import warnings
 
+import more_itertools
 import sqlalchemy.orm
 import sqlalchemy.util
 
@@ -12,8 +13,6 @@ from .. import util
 
 class ORMObjectsConstructor(object):
     """Consturctor of ORM classes objects"""
-
-    logger = util.getLogger("exstruct.orm.constructor")
 
     def __init__(
         self,
@@ -28,6 +27,7 @@ class ORMObjectsConstructor(object):
             default_orm_package (str, optional): Default name for sub-module containing generated ORM classes. Defaults to "_generated_classes".
             default_schema (str, optional): Default schema to. Defaults to None.
         """
+        self.logger = util.getLogger(f"{self.__module__}.{self.__class__.__name__}")
         self._imported_modules = imported_modules if imported_modules else []
         self._default_orm_package_name = default_orm_package
         self._default_schema = default_schema
@@ -61,10 +61,12 @@ class ORMObjectsConstructor(object):
 
         result = []
         result_ids = []
-        for object in constructed_objects:
-            if id(object) not in result_ids:
-                result.append(object)
-                result_ids.append(id(object))
+        for orm_object in more_itertools.collapse(
+            constructed_objects, base_type=sqlalchemy.orm.DeclarativeMeta
+        ):
+            if id(orm_object) not in result_ids:
+                result.append(orm_object)
+                result_ids.append(id(orm_object))
         return result
 
     def _construct(self, document: dict | typing.Iterable[dict], schema: str = None):
@@ -93,8 +95,7 @@ class ORMObjectsConstructor(object):
             )
 
         module_name = f"{schema}{self._default_orm_package_name}"
-        if module_name not in self.imported_modules:
-            self.import_module(
+        self.import_module(
                 module_name,
                 self._default_orm_package_name,
             )
@@ -121,6 +122,14 @@ class ORMObjectsConstructor(object):
         """
         object_name, object_elements = object_args
 
+        if isinstance(object_elements, (list, tuple)):
+            return [
+                self.create_object(module_name=module_name, object_args=item)
+                for item in itertools.zip_longest(
+                    tuple(), object_elements, fillvalue=object_name
+                )
+            ]
+
         columns, children = {}, {}
         for key, value in object_elements.items():
             if isinstance(value, (dict, list)):
@@ -135,8 +144,10 @@ class ORMObjectsConstructor(object):
 
         for child in children.items():
             if isinstance(child[1], list):
+                child_orm = []
                 for item in child[1]:
-                    self.create_object(module_name, (child[0], item), new_object)
+                    child_orm.append(self.create_object(module_name, (child[0], item)))
+                self._add_relationship(new_object, child_orm) if child_orm else None
             else:
                 self.create_object(module_name, child, new_object)
 
@@ -196,7 +207,7 @@ class ORMObjectsConstructor(object):
     def _add_relationship(
         self,
         parent: sqlalchemy.orm.DeclarativeMeta,
-        child: sqlalchemy.orm.DeclarativeMeta,
+        child: sqlalchemy.orm.DeclarativeMeta | list[sqlalchemy.orm.DeclarativeMeta],
     ):
         """Add relationship between two ORM objects
 
@@ -204,11 +215,17 @@ class ORMObjectsConstructor(object):
             parent (sqlalchemy.orm.DeclarativeMeta): Parent of ORM relationship
             child (sqlalchemy.orm.DeclarativeMeta): Child of ORM relationship
         """
-        relationship_name = f"relationship_{child.__cls_name__}"
+        if not isinstance(child, (list, tuple)):
+            children = [child]
+        else:
+            children = child
+        relationship_name = f"relationship_{children[0].__cls_name__}"
         relationship = parent.__getattribute__(relationship_name)
-        relationship_ids = [id(item) for item in relationship]
-        if id(child) not in relationship_ids:
-            relationship.append(child)
+        relationship_ids = {id(item) for item in relationship}
+        for child in children:
+            if id(child) not in relationship_ids:
+                relationship.append(child)
+                relationship_ids.add(id(child))
 
     def import_module(self, module_name: str, package_name: str = None):
         """Add module to global namespace
@@ -217,11 +234,14 @@ class ORMObjectsConstructor(object):
             module_name (str): Module to import
             package_name (str, optional): Sub-module where module lies. Defaults to None.
         """
-        if globals().get(module_name, None):
+        if globals().get(module_name):
             err_msg = f"Module {module_name} is already imported"
             warnings.warn(err_msg)
-            if module_name not in self._imported_modules:
-                self._imported_modules.append(module_name)
+            globals()[module_name] = importlib.reload(globals()[module_name])
+            return globals()[module_name]
+        
+        if module_name not in self._imported_modules:
+            self._imported_modules.append(module_name)
 
         if package_name is None:
             package_name = self._default_orm_package_name
@@ -230,7 +250,7 @@ class ORMObjectsConstructor(object):
         globals()[module_name] = importlib.import_module(
             f".{module_name}", package_name
         )
-        self._imported_modules.append(module_name)
+        return globals()[module_name]
 
     def import_modules(
         self, modules_names: typing.Iterable[str], package_name: str = None

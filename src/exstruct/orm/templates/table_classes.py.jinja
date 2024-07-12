@@ -38,10 +38,10 @@ class memoize(object):
 
 {% for table in foreign_keys[export_type] %}
 {{export_type}}_{{table}}_association_table = sqlalchemy.Table(
-        '{{assoc_tables_names[(export_type, table)]}}',
+        '{{assoc_tables_names[(export_type, table)]}}'.lower(),
         sql_Base.metadata,
-        sqlalchemy.Column('{% if export_type==table %}parent_{% endif %}{{export_type[:53]}}_id', sqlalchemy.ForeignKey('{{table_schema}}.{{export_type[:63]}}.{{export_type[:60]}}_id'), primary_key=True),
-        sqlalchemy.Column('{{table[:60]}}_id', sqlalchemy.ForeignKey('{{table_schema}}.{{table[:63]}}.{{table[:60]}}_id'), primary_key=True),
+        sqlalchemy.Column('{% if export_type==table %}parent_{% endif %}{{export_type[:53]}}_id'.lower(), sqlalchemy.ForeignKey('{{table_schema}}.{{export_type[:63]}}.{{export_type[:60]}}_id'.lower()), primary_key=True),
+        sqlalchemy.Column('{{table[:60]}}_id'.lower(), sqlalchemy.ForeignKey('{{table_schema}}.{{table[:63]}}.{{table[:60]}}_id'.lower()), primary_key=True),
         schema = '{{table_schema}}'
     )
 {% endfor %}
@@ -62,18 +62,18 @@ class {{export_type}}(sql_Base):
     _instances = {{"{}"}}
     
     __cls_name__ = "{{export_type}}"
-    __tablename__="{{export_type[:63]}}"
-    __table_args__={{'{'}}"schema": "{{table_schema}}", "extend_existing": True, "comment": """ {{tables_info[export_type]['annotation']}} """{{'}'}}
+    __tablename__ = "{{export_type[:63]}}".lower()
+    __table_args__ = {{'{'}}"schema": "{{table_schema}}", "extend_existing": True, "comment": """ {{tables_info[export_type]['annotation']}} """{{'}'}}
 
 
-    {{export_type[:60]}}_id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True, nullable=False)
-    {{export_type[:57]}}_tmstp = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False, default=sqlsqlalchemy.func.now())
-    {% if external_ids[export_type].__len__()%}{{export_type[:56]}}_ext_id = sqlalchemy.Column(sqlalchemy.String, unique=True){% endif %}
+    {{export_type[:60]}}_id = sqlalchemy.Column('{{export_type[:60]}}_id'.lower(), sqlalchemy.Integer, primary_key=True, nullable=False)
+    {{export_type[:57]}}_tmstp = sqlalchemy.Column('{{export_type[:57]}}_tmstp'.lower(), sqlalchemy.DateTime, nullable=False, default=sqlalchemy.func.now())
+    {% if external_ids[export_type].__len__()%}{{export_type[:56]}}_ext_id = sqlalchemy.Column('{{export_type[:56]}}_ext_id'.lower(), sqlalchemy.String, unique=True){% endif %}
 
-    {%if tables_info[export_type]['value_column']%}{{export_type[:57]}}_value = sqlalchemy.Column(sqlalchemy.String){%endif%}
+    {%if tables_info[export_type]['value_column']%}{{export_type[:57]}}_value = sqlalchemy.Column('{{export_type[:57]}}_value'.lower(), sqlalchemy.String){%endif%}
 
     {% for column in tables[export_type] %}
-{{column}} = sqlalchemy.Column(sqlalchemy.{{tables[export_type][column]["@collected_info"]['type']}},
+{{column}} = sqlalchemy.Column('{{column}}'.lower(), sqlalchemy.{{tables[export_type][column]["@collected_info"]['type']}},
     comment=""" {{tables[export_type][column]["@collected_info"]['annotation']}} """, 
     doc=""" {{tables[export_type][column]["@collected_info"]['annotation']}} """,
     )
@@ -128,18 +128,35 @@ sqlalchemy.event.listen(
 )
 {% endif %}
 
-class archive_{{export_type}}(sql_Base):
-    __tablename__="{{export_type[:58]}}_arch"
-    __table_args__={{'{'}}"schema": "{{table_schema}}_arch", "extend_existing": True, "comment": "{{export_type}} table archive"{{'}'}}
+archive_{{export_type}}_trigger = sqlalchemy.DDL(
+    """
+    CREATE OR REPLACE TRIGGER archive_table 
+    BEFORE TRUNCATE ON "{{table_schema}}"."{{export_type[:63].lower()}}"
+    FOR EACH STATEMENT EXECUTE FUNCTION sys.archive_table('{{export_type[:63].lower()}}',
+	'{{table_schema}}',
+	'{{table_schema}}_arch',
+	'{{export_type[:60].lower()}}_id')
+    """
+)
 
-    {{export_type[:60]}}_id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True, nullable=False)
-    {{export_type[:57]}}_tmstp = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False, default=sqlalchemy.func.now())
-    {{export_type[:52]}}_arch_tmstp = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False, default=sqlalchemy.func.now())
+sqlalchemy.event.listen(
+    {{export_type}}.__table__, 
+    'after_create', 
+    archive_{{export_type}}_trigger.execute_if(dialect='postgresql')
+)
+
+class archive_{{export_type}}(sql_Base):
+    __tablename__ = "{{export_type[:63]}}".lower()
+    __table_args__ = {{'{'}}"schema": "{{table_schema}}_arch", "extend_existing": True, "comment": "{{export_type}} table archive"{{'}'}}
+
+    {{export_type[:60]}}_id = sqlalchemy.Column('{{export_type[:60]}}_id'.lower(), sqlalchemy.Integer, primary_key=True, nullable=False)
+    {{export_type[:57]}}_tmstp = sqlalchemy.Column('{{export_type[:57]}}_tmstp'.lower(), sqlalchemy.DateTime, nullable=False, default=sqlalchemy.func.now())
+    {{export_type[:52]}}_arch_tmstp = sqlalchemy.Column('{{export_type[:52]}}_arch_tmstp'.lower(), sqlalchemy.DateTime, nullable=False, default=sqlalchemy.func.now())
     {% if external_ids[export_type].__len__()%}{{export_type[:56]}}_ext_id = sqlalchemy.Column(sqlalchemy.String, sqlalchemy.ForeignKey("{{table_schema}}.{{export_type}}.{{export_type[:56]}}_ext_id")){% endif %}
 
 
     {% for column in tables[export_type] %}
-{{column}} = sqlalchemy.Column(sqlalchemy.{{tables[export_type][column]["@collected_info"]['type']}},
+{{column}} = sqlalchemy.Column('{{column}}'.lower(), sqlalchemy.{{tables[export_type][column]["@collected_info"]['type']}},
     comment=""" {{tables[export_type][column]["@collected_info"]['annotation']}} """, 
     doc=""" {{tables[export_type][column]["@collected_info"]['annotation']}} """,
     )
@@ -151,8 +168,8 @@ class archive_{{export_type}}(sql_Base):
 {% endfor %}
 
 class ImportLog(sql_Base):
-    __tablename__="import_log"
-    __table_args__={'schema':'sys', "extend_existing":True, "comment":"Системные логи импорта данных"}
+    __tablename__ = "import_log"
+    __table_args__ = {'schema':'sys', "extend_existing":True, "comment":"Системные логи импорта данных"}
 
     import_log_id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True, nullable=False)
     import_log_tmstp = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False, default=sqlalchemy.func.now())

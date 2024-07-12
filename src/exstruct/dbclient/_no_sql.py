@@ -11,9 +11,6 @@ from exstruct.util import _util
 from ..util import _util
 from ._base_client import BaseDBClient
 
-logger = _util.getLogger("exstruct.dbclient.no_sql")
-
-
 class MongoDBClient(BaseDBClient):
     """Handles interaction with MongoDB database"""
 

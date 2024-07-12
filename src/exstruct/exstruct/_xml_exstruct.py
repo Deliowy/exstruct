@@ -13,8 +13,6 @@ from ._base_exstruct import BaseExStruct
 class XMLExStruct(BaseExStruct):
     """Extractor of data structure from XML document"""
 
-    logger = _util.getLogger("exstruct.exstruct.xml_exstruct")
-
     def __init__(
         self,
         data_type_mapping: dict,

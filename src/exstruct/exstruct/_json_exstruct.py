@@ -8,8 +8,6 @@ from deepdiff import DeepDiff
 from ..util import _util
 from ._base_exstruct import BaseExStruct
 
-logger = _util.getLogger("exstruct.exsturct.json_exstruct")
-
 
 class JSONSchemaExStruct(BaseExStruct):
     """Extractor of data structure from JSON schema"""
@@ -82,8 +80,12 @@ class JSONSchemaExStruct(BaseExStruct):
         child_elements = schema_type.get("properties", None)
         if child_elements:
             for child_element_name in child_elements:
+                if child_elements[child_element_name].get('type') and child_elements[child_element_name]['type']=='array':
+                    child_schema_type = child_elements[child_element_name]['items']
+                else:
+                    child_schema_type = child_elements[child_element_name]
                 result[child_element_name] = self.parse_element(
-                    child_element_name, child_elements[child_element_name], ref_resolver
+                    child_element_name, child_schema_type, ref_resolver
                 )
 
         result["@collected_info"] = collected_info_settings
@@ -225,7 +227,7 @@ class JSONExStruct(BaseExStruct):
 
         except Exception as err:
             err_msg = f"Ошибка {err.args} при парсинге поля '{element_name}' элемента {element}"
-            logger.error(err_msg)
+            self.logger.error(err_msg)
 
     def _parse_child_element(self, element_content, result):
         for name, value in element_content.items():
