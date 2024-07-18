@@ -615,28 +615,38 @@ class AsyncAPIParser(APIParser):
 
 
 class API_retry_if_status_code(tenacity.retry_base):
-    def __init__(self, *status_codes: tuple[requests.structures.LookupDict]) -> None:
+    def __init__(self, *status_codes: requests.structures.LookupDict) -> None:
         super().__init__()
         self.status_codes = status_codes if status_codes else ()
 
     def __call__(self, retry_state: tenacity.RetryCallState) -> bool:
         exception = retry_state.outcome.exception()
         if issubclass(exception.__class__, Exception):
-            if_retry = int(exception.response.status_code) in self.status_codes
+            response = exception.response
+            if response:
+                status_code = response.get(status_code, 400)
+            else:
+                status_code = 400
+            if_retry = int(status_code) in self.status_codes
         else:
             if_retry = False
         return if_retry
 
 
 class API_retry_if_not_status_code(tenacity.retry_base):
-    def __init__(self, *status_codes: tuple[requests.structures.LookupDict]) -> None:
+    def __init__(self, *status_codes: requests.structures.LookupDict) -> None:
         super().__init__()
         self.status_codes = status_codes if status_codes else ()
 
     def __call__(self, retry_state: tenacity.RetryCallState) -> bool:
         exception = retry_state.outcome.exception()
         if issubclass(exception.__class__, Exception):
-            if_retry = int(exception.response.status_code) not in self.status_codes
+            response = exception.response
+            if response:
+                status_code = response.get(status_code, 400)
+            else:
+                status_code = 400
+            if_retry = int(status_code) not in self.status_codes
         else:
             if_retry = False
         return if_retry
