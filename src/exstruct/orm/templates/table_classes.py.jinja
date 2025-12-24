@@ -79,7 +79,7 @@ class {{export_type}}(sql_Base):
     )
     {% endfor %}
 
-
+#TODO https://docs.sqlalchemy.org/en/20/orm/join_conditions.html#self-referential-many-to-many-relationship
     {% for relationship in relationships[export_type]%}
 relationship_{{relationship}} = sqlalchemy.orm.relationship(
         "{{relationship}}",

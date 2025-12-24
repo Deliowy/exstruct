@@ -621,7 +621,7 @@ class API_retry_if_status_code(tenacity.retry_base):
 
     def __call__(self, retry_state: tenacity.RetryCallState) -> bool:
         exception = retry_state.outcome.exception()
-        if issubclass(exception.__class__, Exception):
+        if issubclass(exception.__class__, requests.RequestException):
             response = exception.response
             if response:
                 status_code = response.get(status_code, 400)
@@ -640,7 +640,7 @@ class API_retry_if_not_status_code(tenacity.retry_base):
 
     def __call__(self, retry_state: tenacity.RetryCallState) -> bool:
         exception = retry_state.outcome.exception()
-        if issubclass(exception.__class__, Exception):
+        if issubclass(exception.__class__, requests.RequestException):
             response = exception.response
             if response:
                 status_code = response.get(status_code, 400)

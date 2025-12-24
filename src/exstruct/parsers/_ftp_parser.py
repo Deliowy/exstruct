@@ -95,6 +95,8 @@ class FTPParser(BaseParser):
 
             self.syncnumber = 0
             self.sftp_cycle(folder=self.start_folder, ftp_client=sftp, pathlist=pathlist)
+            sftp.close()
+            ssh_client.close()
 
         except OSError as oerr:
             if oerr == "timed out":
@@ -219,9 +221,9 @@ class FTPParser(BaseParser):
         """
         try:
             self.logger.info(f"{full_path} downloading...")
-            download_folder = Path(self.download_folder, name)
-            os.makedirs(self.download_folder, exist_ok=True)
-            ftp_client.get(remotepath=str(full_path), localpath=str(download_folder))
+            download_folder = Path(self.download_folder, full_path.relative_to(self.start_folder))
+            os.makedirs(download_folder.parent, exist_ok=True)
+            ftp_client.get(remotepath=str(name), localpath=str(download_folder))
             self.logger.info("Ok.")
         except KeyboardInterrupt:
             self.logger.info("You have interrupted file downloading.")
@@ -258,7 +260,7 @@ class FTPParser(BaseParser):
         """
         ftp_client.chdir(folder)
         pathlist.append(folder)
-        for file in ftp_client.listdir_iter():
+        for file in ftp_client.listdir_attr():
             _type = file.longname[0]
             if _type == "d":
                 self.sftp_cycle(folder=file.filename, ftp_client=ftp_client, pathlist=pathlist)

@@ -1,4 +1,5 @@
 import datetime
+import functools
 import importlib
 import itertools
 import typing
@@ -19,6 +20,7 @@ class ORMObjectsConstructor(object):
         imported_modules: list[str] = None,
         default_orm_package: str = "_generated_classes",
         default_schema: str = None,
+        *args, **kwargs
     ) -> None:
         """Initialize instance of `ORMObjectConstructor`
 
@@ -35,6 +37,9 @@ class ORMObjectsConstructor(object):
         self.import_modules(self._imported_modules, self._default_orm_package_name)
 
         self._used_classes = set()
+        
+        if kwargs.get('use_cache', False):
+            self._create_object = functools.lru_cache(typed=True)(self._create_object)
 
     def clear_cache(self):
         """Clear created instances of ORM classes"""
@@ -52,6 +57,11 @@ class ORMObjectsConstructor(object):
             list: created ORM objects
         """
         # constructed_objects CAN contain duplicate values
+        constructed_objects = list(
+            self._construct(
+                tuple(more_itertools.always_iterable(document, base_type=dict)), schema=schema
+            )
+        )
         if isinstance(document, (list, tuple)):
             constructed_objects = list(
                 self._construct(document=document, schema=schema)
@@ -90,15 +100,13 @@ class ORMObjectsConstructor(object):
             schema = self._default_schema
 
         if isinstance(document, (list, tuple, map)):
-            return itertools.starmap(
-                self._construct, itertools.product(document, (schema,))
-            )
+            return map(functools.partial(self._construct, schema=schema), document)
 
         module_name = f"{schema}{self._default_orm_package_name}"
         self.import_module(
-                module_name,
-                self._default_orm_package_name,
-            )
+            module_name,
+            self._default_orm_package_name,
+        )
 
         root_object = self.create_object(module_name, *document.items())
 
@@ -136,7 +144,7 @@ class ORMObjectsConstructor(object):
                 children[key] = value
             else:
                 if value is not None:
-                    columns[util.to_var_name(key)] = self._prepare_value(value)
+                    columns[util.to_var_name(key)] = value
 
         new_object = self._create_object(module_name, object_name, **columns)
 
@@ -162,21 +170,15 @@ class ORMObjectsConstructor(object):
         Args:
             module_name (str): Module containing definitions of ORM classes
             class_name (str): Name of ORM class
+            **columns (dict): Non-empty values of ORM-instance-to-create
 
         Returns:
             sqlalchemy.orm.DeclarativeMeta: Instance of ORM class `class_name`
         """
-        command_arguments = []
-        for name, value in columns.items():
-            command_arguments.append(f"{name} = {value}")
-        command_arguments_str = ", ".join(command_arguments)
-        command = f"result = {module_name}.{util.to_var_name(class_name)}({command_arguments_str})"
-        compiled_command = compile(command, __file__, "single")
-
-        loc = {}
-        exec(compiled_command, globals(), loc)
-
-        return loc["result"]
+        module = globals()[module_name]
+        cls = getattr(module, class_name)
+        obj = cls(**columns)
+        return obj
 
     def _prepare_value(
         self, value: str | int | float | datetime.date | datetime.datetime
@@ -191,9 +193,7 @@ class ORMObjectsConstructor(object):
         """
         if isinstance(value, str):
             unquoted_value = value.replace('"', "''")
-            prepared_value = (
-                f'r""" {unquoted_value} """' if '"' in value else repr(value)
-            )
+            prepared_value = f'r""" {unquoted_value} """' if '"' in value else value
         elif isinstance(value, datetime.datetime):
             str_datetime = str(value)
             prepared_value = f"datetime.datetime.fromisoformat('{str_datetime}')"
@@ -239,7 +239,7 @@ class ORMObjectsConstructor(object):
             warnings.warn(err_msg)
             globals()[module_name] = importlib.reload(globals()[module_name])
             return globals()[module_name]
-        
+
         if module_name not in self._imported_modules:
             self._imported_modules.append(module_name)
 

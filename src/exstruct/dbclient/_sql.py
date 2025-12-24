@@ -23,6 +23,7 @@ class SQLAlchemyDBClient(BaseDBClient):
         **kwargs,
     ) -> None:
         super().__init__(db_logger, logging_level, *args, **kwargs)
+        self.sessionmaker = sqlalchemy.orm.sessionmaker(self.engine)
 
     @classmethod
     def get_engine(
@@ -94,11 +95,13 @@ class SQLAlchemyDBClient(BaseDBClient):
         # Create tables and schema before loading data
         @retry(
             stop=tenacity.stop.stop_after_attempt(5),
-            after=tenacity.after.after_log(logger=self.logger, log_level=_util.logging.WARNING),
+            after=tenacity.after.after_log(
+                logger=self.logger, log_level=_util.logging.WARNING
+            ),
         )
         def load_wrapper():
             self.init_tables(package[0].metadata)
-            with sqlalchemy.orm.Session(self.engine) as session:
+            with self.sessionmaker.begin() as session:
                 session.add_all(package)
                 session.commit()
 
@@ -107,7 +110,7 @@ class SQLAlchemyDBClient(BaseDBClient):
     def query(self, sql_query: str):
         compiled_sql_query = sqlalchemy.text(sql_query)
 
-        with sqlalchemy.orm.Session(self.engine) as session:
+        with self.sessionmaker.begin() as session:
             query_result = session.execute(compiled_sql_query)
             result_content = query_result.fetchall()
 
@@ -115,12 +118,14 @@ class SQLAlchemyDBClient(BaseDBClient):
 
     def ping(self):
         try:
-            self.engine.connect()
+            self.engine.connect().close()
             return True
         except sqlalchemy.exc.OperationalError:
             return False
 
-    def init_tables(self, metadata: sqlalchemy.MetaData, engine: sqlalchemy.engine.Engine = None):
+    def init_tables(
+        self, metadata: sqlalchemy.MetaData, engine: sqlalchemy.engine.Engine = None
+    ):
         engine = engine if engine else self.engine
         with engine.begin() as conn:
             metadata.create_all(bind=conn)
@@ -202,7 +207,9 @@ class AsyncSQLAlchemyDBClient(object):
     async def _load(self, package: typing.Iterable):
         @retry(
             stop=tenacity.stop.stop_after_attempt(5),
-            after=tenacity.after.after_log(logger=self.logger, log_level=_util.logging.WARNING),
+            after=tenacity.after.after_log(
+                logger=self.logger, log_level=_util.logging.WARNING
+            ),
         )
         async def load_wrapper():
             await self.init_tables(package[0].metadata)
